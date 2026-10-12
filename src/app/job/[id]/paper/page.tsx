@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import ARSPlanChat from "@/components/ARSPlanChat";
+import AtlasPlan from "@/components/AtlasPlan";
 import AssistantChat from "@/components/AssistantChat";
 import ExperimentsPanel from "@/components/ExperimentsPanel";
 import NotesPanel from "@/components/NotesPanel";
@@ -11,7 +11,7 @@ import PaperMapPicker from "@/components/PaperMapPicker";
 import PaperQuizPanel from "@/components/PaperQuizPanel";
 import { REL_COLOR, REL_FALLBACK, TIER_COLOR } from "@/components/PaperMap";
 
-type Step = "context" | "outline" | "papers" | "ars" | "experiments";
+type Step = "context" | "outline" | "papers" | "plan" | "experiments";
 
 interface ResearchIdea {
   title: string;
@@ -45,7 +45,7 @@ function PaperPipelineInner() {
   const searchParams = useSearchParams();
   const jobId = params.id as string;
 
-  const VALID_STEPS: Step[] = ["context", "papers", "outline", "ars", "experiments"];
+  const VALID_STEPS: Step[] = ["context", "papers", "outline", "plan", "experiments"];
   const urlStep = searchParams.get("step") as Step | null;
   // Server and first client render must match — always start from the URL (or "context").
   // The cached step is applied after mount in the effect below to avoid SSR hydration mismatch.
@@ -72,7 +72,7 @@ function PaperPipelineInner() {
   const [ideas, setIdeas] = useState<ResearchIdea[]>([]);
   const [ideasSource, setIdeasSource] = useState<"loading" | "converged" | "tree" | "topic">("loading");
   const [selectedIdeaIndex, setSelectedIdeaIndex] = useState(0);
-  const [arsContext, setArsContext] = useState("");
+  const [exportContext, setExportContext] = useState("");
   const [outline, setOutline] = useState<Outline | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -142,7 +142,7 @@ function PaperPipelineInner() {
   useEffect(() => {
     try {
       const cachedContext = localStorage.getItem(`paper-context:${jobId}`);
-      if (cachedContext) setArsContext(cachedContext);
+      if (cachedContext) setExportContext(cachedContext);
       const cachedOutline = localStorage.getItem(`paper-outline:${jobId}`);
       if (cachedOutline) {
         const parsed = JSON.parse(cachedOutline);
@@ -313,8 +313,8 @@ function PaperPipelineInner() {
         body: JSON.stringify({ stage: "context" }),
       });
       const data = await res.json();
-      setArsContext(data.arsContext ?? "");
-      try { if (data.arsContext) localStorage.setItem(`paper-context:${jobId}`, data.arsContext); } catch {}
+      setExportContext(data.exportContext ?? "");
+      try { if (data.exportContext) localStorage.setItem(`paper-context:${jobId}`, data.exportContext); } catch {}
       setStep("context");
     } catch (e) {
       console.error(e);
@@ -416,7 +416,7 @@ function PaperPipelineInner() {
         {/* Step tabs + Quiz button */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-            {(["context", "papers", "outline", "ars", "experiments"] as Step[]).map((s, i) => (
+            {(["context", "papers", "outline", "plan", "experiments"] as Step[]).map((s, i) => (
               <button
                 key={s}
                 onClick={() => setStep(s)}
@@ -427,7 +427,7 @@ function PaperPipelineInner() {
                 }`}
               >
                 <span className="mr-2 text-xs opacity-60">{i + 1}.</span>
-                {s === "context" ? "Select Idea" : s === "papers" ? "Find Papers" : s === "outline" ? "Paper Outline" : s === "ars" ? "Write Paper" : "Experiments"}
+                {s === "context" ? "Select Idea" : s === "papers" ? "Find Papers" : s === "outline" ? "Paper Outline" : s === "plan" ? "Write Paper" : "Experiments"}
               </button>
             ))}
           </div>
@@ -578,7 +578,7 @@ function PaperPipelineInner() {
                     )}
                   </button>
                   <button
-                    onClick={() => setStep("ars")}
+                    onClick={() => setStep("plan")}
                     disabled={ideasSource === "loading" || ideas.length === 0}
                     className="w-full py-3 px-4 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                     style={{ background: "linear-gradient(to right, #5f4e56, #5f4e56)" }}
@@ -589,30 +589,6 @@ function PaperPipelineInner() {
                     Write Paper with This Idea
                   </button>
                 </div>
-              </div>
-
-              <div className="bg-purple-50 rounded-2xl border border-purple-200 p-5">
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="font-semibold text-purple-900 text-sm">ARS Pipeline</h3>
-                </div>
-                <p className="text-xs text-purple-700 leading-relaxed">
-                  12-agent Claude pipeline: plan → outline → draft → peer review → revise.
-                </p>
-                <ul className="mt-2 mb-3 space-y-1 text-xs text-purple-600">
-                  {["Socratic chapter-by-chapter planning", "Auto peer-review simulation", "Citation verification", "LaTeX / APA 7.0 output"].map((f) => (
-                    <li key={f} className="flex gap-1.5">
-                      <span>✓</span> {f}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  onClick={() => setStep("ars")}
-                  disabled={ideasSource === "loading" || ideas.length === 0}
-                  className="w-full py-2 text-white rounded-lg text-xs font-semibold disabled:opacity-50 transition-all"
-                  style={{ background: "#5f4e56" }}
-                >
-                  Write Paper with This Idea →
-                </button>
               </div>
             </div>
           </div>
@@ -830,10 +806,10 @@ function PaperPipelineInner() {
                       Download .md
                     </button>
                     <button
-                      onClick={() => setStep("ars")}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 flex items-center gap-2"
+                      onClick={() => setStep("plan")}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 flex items-center gap-2"
                     >
-                      Run /ars-plan →
+                      Write with Atlas Plan →
                     </button>
                   </div>
                 </div>
@@ -892,12 +868,12 @@ function PaperPipelineInner() {
           </div>
         )}
 
-        {/* ─── Step 3: /ars-plan embedded chat + Atlas Assistant ─── */}
-        {step === "ars" && (
+        {/* ─── Step 3: Atlas Plan + Atlas Assistant ─── */}
+        {step === "plan" && (
           <div className="flex flex-col xl:flex-row gap-6 h-[calc(100vh-220px)] min-h-[520px]">
-            {/* ARS Plan chat (Claude) */}
+            {/* Atlas Plan */}
             <div className="flex-1 min-w-0 min-h-[420px] xl:min-h-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-              <ARSPlanChat key={selectedIdeaIndex} jobId={jobId} selectedIdea={idea} referenceDoc={referenceDoc ?? undefined} />
+              <AtlasPlan key={selectedIdeaIndex} jobId={jobId} selectedIdea={idea} referenceDoc={referenceDoc ?? undefined} />
             </div>
 
             {/* Atlas Assistant chat (Groq, note-taking) */}
@@ -910,9 +886,9 @@ function PaperPipelineInner() {
               <div className="rounded-2xl p-5" style={{ background: "linear-gradient(135deg, #5f4e56, #384a54)", color: "#fbf8f1" }}>
                 <h3 className="font-bold mb-1 text-sm">Two agents, one paper</h3>
                 <p className="text-xs leading-relaxed" style={{ color: "#d6c9cf" }}>
-                  <strong>ARS Plan</strong> (left) is the Socratic planner powered by Claude.{" "}
-                  <strong>Atlas Assistant</strong> (middle) is grounded in your session evidence,
-                  answers questions, and saves key replies to your notes.
+                  <strong>Atlas Plan</strong> (left) drafts a contribution statement, claims, and an
+                  outline from your evidence. <strong>Atlas Assistant</strong> (middle) is grounded in
+                  your session evidence, answers questions, and saves key replies to your notes.
                 </p>
               </div>
 
@@ -995,16 +971,16 @@ function PaperPipelineInner() {
               </div>
 
               <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm space-y-3">
-                <p className="text-sm font-semibold text-gray-800">Export context for Claude Code</p>
+                <p className="text-sm font-semibold text-gray-800">Export context</p>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  Want the full 12-agent ARS pipeline (peer review, LaTeX output, citation verification)?
-                  Export your context and continue in Claude Code.
+                  Export your research context as plain Markdown — paste it into any editor or agent
+                  you use for writing.
                 </p>
                 <div className="space-y-2">
                   <button
                     onClick={() => {
-                      if (!arsContext) generateContext();
-                      else copyToClipboard(arsContext);
+                      if (!exportContext) generateContext();
+                      else copyToClipboard(exportContext);
                     }}
                     disabled={loading}
                     className="w-full py-2 px-3 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
@@ -1016,11 +992,11 @@ function PaperPipelineInner() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                     )}
-                    {copied ? "Copied!" : arsContext ? "Copy Context" : "Generate & Copy"}
+                    {copied ? "Copied!" : exportContext ? "Copy Context" : "Generate & Copy"}
                   </button>
-                  {arsContext && (
+                  {exportContext && (
                     <button
-                      onClick={() => downloadFile(arsContext, "ars-context.md")}
+                      onClick={() => downloadFile(exportContext, "research-context.md")}
                       className="w-full py-2 px-3 border border-gray-300 text-gray-700 rounded-lg text-xs hover:bg-gray-50"
                     >
                       Download .md
@@ -1063,29 +1039,6 @@ function PaperPipelineInner() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
-                <p className="text-xs font-semibold text-gray-700 mb-2">Claude Code commands</p>
-                <div className="space-y-1.5">
-                  {[
-                    { cmd: "/ars-plan", desc: "Socratic planning (this)" },
-                    { cmd: "/ars-outline", desc: "Quick outline + evidence map" },
-                    { cmd: "/ars-full", desc: "Full pipeline: write → review" },
-                  ].map(({ cmd, desc }) => (
-                    <div key={cmd} className="flex items-start gap-2">
-                      <code className="text-xs bg-gray-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono flex-shrink-0">
-                        {cmd}
-                      </code>
-                      <span className="text-xs text-gray-500">{desc}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                  Install:{" "}
-                  <code className="font-mono text-gray-500 text-xs">
-                    /plugin marketplace add<br />Imbad0202/academic-research-skills
-                  </code>
-                </p>
-              </div>
             </div>
           </div>
         )}

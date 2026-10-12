@@ -549,8 +549,8 @@ ${notesSection}
                 </svg>
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-sm leading-tight">Write Paper with ARS</p>
-                <p className="text-xs text-indigo-200 leading-tight">Generate outline → full pipeline</p>
+                <p className="font-semibold text-sm leading-tight">Write Paper with Atlas Plan</p>
+                <p className="text-xs text-indigo-200 leading-tight">Draft a contribution, claims, and an outline</p>
               </div>
               <svg className="w-4 h-4 ml-auto flex-shrink-0 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

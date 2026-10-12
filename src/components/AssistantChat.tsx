@@ -35,7 +35,7 @@ interface AssistantChatProps {
 const WELCOME: Message = {
   role: "assistant",
   content:
-    "Hi! I'm Atlas, your writing assistant. I can see this session's evidence and ideas, and I work alongside the ARS Plan chat.\n\nAsk me to explain concepts, structure an argument, compare methods from the papers — or say \"remember that ...\" and I'll save it straight to your notes.",
+    "Hi! I'm Atlas, your writing assistant. I can see this session's evidence and ideas, and I work alongside Atlas Plan.\n\nAsk me to explain concepts, structure an argument, compare methods from the papers — or say \"remember that ...\" and I'll save it straight to your notes.",
 };
 
 function makeCacheKey(jobId: string): string {

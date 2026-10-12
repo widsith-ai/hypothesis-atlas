@@ -81,7 +81,7 @@ Structure your plans around:
 6. **Expected results** — concrete quantitative predictions. ALWAYS state the key expected results as plain arithmetic expressions that can be checked (e.g. "expected accuracy gain: 0.843 - 0.812 = 0.031"), and include the equations in LaTeX form as well. When you give an expected value, write the expression that produces it so the verification step can evaluate it.
 
 Be concrete and quantitative. Prefer real numbers (from the papers above, or clearly-labeled assumptions) over vague claims.`
-    : `You are the writing assistant working alongside the ARS Plan chat. Help the researcher finish their paper: clarify concepts, suggest phrasings, structure arguments, explain methods from the literature, and challenge weak reasoning. Ground your help in the session context — cite specific papers or findings by name. Be concise and practical.`
+    : `You are the writing assistant working alongside the Atlas Plan tool. Help the researcher finish their paper: clarify concepts, suggest phrasings, structure arguments, explain methods from the literature, and challenge weak reasoning. Ground your help in the session context — cite specific papers or findings by name. Be concise and practical.`
 }
 
 ## Note-Taking Skill

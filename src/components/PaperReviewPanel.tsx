@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { extractAtlasPlanDraft, extractLegacyArsDraft, pickNewestDraft, type DraftCandidate, type DraftInfo } from "@/lib/paperDraftMigration";
 
 interface ReviewScores {
   novelty: number;
@@ -68,55 +69,28 @@ function scoreColor(v: number): string {
   return "#9c3a26";
 }
 
-function extractDraftFromKey(key: string): { text: string; savedAt: number } | null {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const messages: { role: string; content: string }[] = parsed.messages ?? [];
-    const assistantParts = messages.filter((m) => m.role === "assistant" && m.content?.trim());
-    if (assistantParts.length === 0) return null;
-    // Last assistant message is usually the full draft; prepend earlier substantial ones
-    const last = assistantParts[assistantParts.length - 1].content.trim();
-    const text =
-      last.length >= 1500 || assistantParts.length === 1
-        ? last
-        : assistantParts
-            .slice(-2)
-            .map((m) => m.content.trim())
-            .join("\n\n");
-    if (!text) return null;
-    return { text, savedAt: typeof parsed.savedAt === "number" ? parsed.savedAt : 0 };
-  } catch {
-    return null;
-  }
-}
-
-interface DraftInfo {
-  label: string;
-  savedAt: number;
-  text: string;
-}
-
-// The "current paper" is the most recently saved Write Paper (ARS) draft on this device
+// The "current paper" is the most recently saved Write Paper draft on this device — see
+// lib/paperDraftMigration.ts for why this reads two cache-key prefixes, not a migration.
 function findCurrentDraft(): DraftInfo | null {
   try {
     const lastJobId = localStorage.getItem("lastJobId");
     if (!lastJobId) return null;
-    const prefix = `ars-plan:${lastJobId}:`;
-    let best: { key: string; savedAt: number } | null = null;
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key || !key.startsWith(prefix)) continue;
-      const hit = extractDraftFromKey(key);
-      if (hit && (!best || hit.savedAt > best.savedAt)) best = { key, savedAt: hit.savedAt };
+
+    const sources: { prefix: string; extract: (raw: string | null) => { text: string; savedAt: number } | null }[] = [
+      { prefix: `atlas-plan:${lastJobId}:`, extract: extractAtlasPlanDraft },
+      { prefix: `ars-plan:${lastJobId}:`, extract: extractLegacyArsDraft },
+    ];
+
+    const candidates: DraftCandidate[] = [];
+    for (const { prefix, extract } of sources) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.startsWith(prefix)) continue;
+        const hit = extract(localStorage.getItem(key));
+        if (hit) candidates.push({ key, prefix, ...hit });
+      }
     }
-    if (!best) return null;
-    const hit = extractDraftFromKey(best.key);
-    if (!hit) return null;
-    const slug = best.key.slice(prefix.length);
-    const label = slug.split("-").filter(Boolean).join(" ") || "Write Paper session";
-    return { label, savedAt: hit.savedAt, text: hit.text };
+    return pickNewestDraft(candidates);
   } catch {
     return null;
   }

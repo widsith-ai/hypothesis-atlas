@@ -2,7 +2,7 @@
 
 HEPOPS Atlas (Hypothesis Atlas) is a multi-domain evidence mapping platform that automatically discovers, analyzes, and visualizes scientific and technical knowledge from multiple sources including peer-reviewed papers, datasets, and social signals.
 
-It now includes a full **Academic Paper Pipeline** powered by the [ARS (Academic Research Skills)](https://github.com/luxinlabs/academic-research-skills) plugin — letting you go from a research topic all the way to a structured paper draft without leaving the app.
+It now includes a full **Academic Paper Pipeline**, including **Atlas Plan** — an in-app planning tool that drafts a contribution statement, claims, an evidence map grounded in your sources, and an outline, directly from your research — letting you go from a research topic all the way to a structured paper draft without leaving the app.
 
 ## Demo Video
 
@@ -45,11 +45,11 @@ It now includes a full **Academic Paper Pipeline** powered by the [ARS (Academic
 - **Idea selection** — picks from your converged ideas, knowledge tree nodes, or raw topic
 - **Find Papers** — dedicated tab to search OpenAlex + PubMed with editable query; relevance + recency ranked
 - **Paper Outline** — Groq-powered IMRaD outline generation
-- **ARS Plan Mode** — in-app Socratic planning chat powered by Claude (`/ars-plan` workflow)
-  - Session caching: resume previous sessions automatically; restart clears the cache
-  - Reference Document: attach a `.md` draft or notes for Claude to reference during planning
-  - Full context import: topic, peer-reviewed literature, and selected idea injected into every session
-- **Export to Claude Code** — generate a structured context file and continue with the full 12-agent ARS pipeline
+- **Atlas Plan** — drafts a contribution statement, claims to support, an evidence map (each claim checked against your peer-reviewed sources), a method/data plan, threats to validity, and an outline, in one pass
+  - Session caching: resume the last plan per idea automatically
+  - Reference Document: attach a `.md` draft or notes for the planner to read as context
+  - Claims carry a grounding badge (grounded / unsupported / contradicted), using the same verification pipeline as Peer Review
+- **Export context** — generate a structured, plain-Markdown context file that works with any editor or agent you use for writing
 
 ### Peer Review
 - Standalone **Peer Review session** at `/review` (nav button on Explore, next to Write Paper)
@@ -101,7 +101,7 @@ Open http://localhost:3000
    DATABASE_URL="postgresql://postgres:postgres@localhost:5433/hypothesis_atlas?schema=public"
    REDIS_URL="redis://localhost:6379"
    GROQ_API_KEY="your_groq_api_key_here"
-   ANTHROPIC_API_KEY="sk-ant-..."        # required for ARS Plan Mode
+   ANTHROPIC_API_KEY="sk-ant-..."        # required for Paper Compare Mode
    RESEND_API_KEY="re_..."               # required for weekly digest emails
    NEXT_PUBLIC_APP_URL="http://localhost:3000"  # used in email unsubscribe links
    ```
@@ -109,7 +109,7 @@ Open http://localhost:3000
 4. Push schema: `make db-push`
 5. Start app and worker: `make dev` and `make worker`
 
-> `ANTHROPIC_API_KEY` is only required for the in-app ARS Plan chat. All other features work without it.
+> `ANTHROPIC_API_KEY` is only required for Paper Compare Mode. `GROQ_API_KEY` powers Atlas Plan and the rest of the app's LLM features.
 
 ---
 
@@ -118,9 +118,9 @@ Open http://localhost:3000
 1. Visit `/explore`, choose a domain, and click a term in the word cloud
 2. Watch the real-time evidence gathering in the Knowledge Tree
 3. Open the **Notebook** tab → brainstorm → **Converge to Top 3** ideas
-4. Click **Write Paper** in the tab bar → select an idea → plan and draft with ARS
+4. Click **Write Paper** in the tab bar → select an idea → plan and draft with Atlas Plan
 5. Click **Peer Review** next to Write Paper → your current draft is loaded by default → a committee of reviewer agents grades it against your target venue
-6. Optionally export context and continue in Claude Code with `/ars-full`
+6. Optionally export your research context as Markdown and continue writing in any editor or agent
 7. Open **Research Graph** (`/graph`) any time → every run's knowledge accumulates into one persistent, duplicate-free graph (the same concept across runs converges onto one node) → ask "what have I learned about X across all my runs" → edit or extend the graph yourself
 
 ### Paper Pipeline flow
@@ -131,28 +131,29 @@ Open http://localhost:3000
                                 ↓
                         1. Select Idea
                         2. Paper Outline  (optional — Groq)
-                        3. Write Paper    (ARS Plan chat — Claude)
+                        3. Write Paper    (Atlas Plan)
                                 ↓
-                     Export → Claude Code /ars-full
+                        Export context (Markdown)
 ```
 
 ---
 
-## ARS Integration
+## Acknowledgments and prior art
 
-This app integrates with the [Academic Research Skills](https://github.com/Imbad0202/academic-research-skills) Claude Code plugin suite (original by Cheng-I Wu; adapted at [luxinlabs/academic-research-skills](https://github.com/luxinlabs/academic-research-skills)):
+Atlas's review and planning are original implementations; the projects below informed the design. No code or prompts are copied.
 
-| In-app feature | ARS equivalent |
-|---|---|
-| ARS Plan chat (step 3) | `/ars-plan` Socratic planning mode |
-| Paper Outline (step 2) | `/ars-outline` |
-| Export context → Claude Code | `/ars-full` full 12-agent pipeline |
+| Project | What it informed | License |
+|---|---|---|
+| Academic Research Skills (Cheng-I Wu) | Earlier paper-planning integration (V2), replaced by Atlas Plan in V3.0.0.1 | CC-BY-NC 4.0 |
+| [poldrack/ai-peer-review](https://github.com/poldrack/ai-peer-review) | Multiple independent reviewers plus a meta-review | MIT |
+| [FanBroWell/AI-paper-reviewer](https://github.com/FanBroWell/AI-paper-reviewer) | Pre-submission checks on claims, experiments and citations | MIT |
+| [JShi12/AI-literature-review-assistant](https://github.com/JShi12/AI-literature-review-assistant) | Citations tied to source passages | MIT |
+| [The AI Scientist](https://arxiv.org/abs/2408.06292) (Lu et al., 2024) | Automated review and benchmarking reviews against ICLR | AI Scientist Source Code License |
+| [SelfCheckGPT](https://arxiv.org/abs/2303.08896) (Manakul et al., EMNLP 2023) | Self-consistency for hallucination detection (`applySelfConsistency`) | MIT |
+| [MiniCheck](https://arxiv.org/abs/2404.10774) (Tang et al., EMNLP 2024) | Checking claims against grounding documents | Apache-2.0 |
+| [DeBERTa-v3 NLI](https://huggingface.co/MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli) | The default entailment model in `review-grounding.ts` | Check the model card |
 
-To use the full pipeline outside the app:
-```
-/plugin marketplace add Imbad0202/academic-research-skills
-/plugin install academic-research-skills
-```
+If code is ever copied from an MIT/Apache project, its license notice will be listed in `THIRD_PARTY_NOTICES.md`.
 
 ---
 
@@ -182,6 +183,10 @@ docker-compose down -v && docker-compose up -d && npm run db:push
 ---
 
 ## Version History
+
+### V3.0.0.1 — Replaced the ARS integration with Atlas Plan
+
+Replaced the ARS integration with Atlas Plan; the review engine was already independent of ARS and is unchanged. Atlas Plan is an original, clean-room implementation — see "Acknowledgments and prior art." Preset peer-review personas are now labeled by role instead of invented names (e.g. "Methodology & Novelty Reviewer"). See #63.
 
 ### V3.2 — License Switch: MIT → AGPL-3.0 (dual licensing)
 
@@ -310,14 +315,11 @@ docker-compose down -v && docker-compose up -d && npm run db:push
 - Pricing: free & open-source; $100 / paper for hosted workflow with managed tokens
 
 ### V2 — Paper Pipeline + ARS Integration
-- In-app ARS Plan chat powered by Claude (`/ars-plan` Socratic planning mode)
+- In-app Socratic planning chat integrating the Academic Research Skills (ARS) Claude Code plugin — replaced by the original Atlas Plan in V3.0.0.1; see "Acknowledgments and prior art"
 - Idea selection from converged ideas, knowledge tree nodes, or raw topic
 - Paper Outline generation via Groq (IMRaD structure)
-- Session caching: resume previous ARS sessions; restart clears the cache
-- Reference Document: attach `.md` drafts or notes for Claude to reference during planning
 - `/jobs` research management page: list, view, write, delete all past runs
 - Knowledge Tree, Notebook, and Paper Map accessible directly from the paper session
-- Export context to Claude Code for the full 12-agent ARS pipeline
 
 ### V1 — Evidence Mapping & Knowledge Tree
 - Word cloud topic explorer across Biology, Chemistry, Technology, and Finance
@@ -343,29 +345,4 @@ See `SECURITY.md` for responsible disclosure.
 
 Dual-licensed — your choice of **GNU AGPL-3.0** (copyleft; see `LICENSE`) or a **commercial license** for use without copyleft obligations (see `COMMERCIAL-LICENSE.md`). All releases before the `v3.2.0` tag remain MIT-licensed forever. Contributions require DCO sign-off — see `CONTRIBUTING.md`.
 
-### Academic Research Skills (ARS) Plugin
-
-The in-app ARS Plan feature integrates the [Academic Research Skills](https://github.com/Imbad0202/academic-research-skills) plugin originally created by **Cheng-I Wu**, licensed under **CC-BY-NC 4.0**.
-
-This work is licensed under [CC-BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/).
-
-You are free to:
-- **Share** — copy and redistribute the material
-- **Adapt** — remix, transform, and build upon the material
-
-Under the following terms:
-- **Attribution** — You must give appropriate credit
-- **NonCommercial** — You may not use the material for commercial purposes
-
-**Attribution:**
-
-> Based on [Academic Research Skills](https://github.com/Imbad0202/academic-research-skills) by Cheng-I Wu
-> https://github.com/Imbad0202/academic-research-skills
-
-#### ARS Learning Resources
-
-The ARS repository also includes structured learning materials covering the full academic research workflow — from Socratic research planning and systematic literature review to multi-agent peer review and publication-ready formatting. If you want to go deeper into the methodology behind the pipeline embedded in this app, visit:
-
-- **Plugin docs**: [`docs/ARCHITECTURE.md`](https://github.com/Imbad0202/academic-research-skills/blob/main/docs/ARCHITECTURE.md)
-- **Setup guide**: [`docs/SETUP.md`](https://github.com/Imbad0202/academic-research-skills/blob/main/docs/SETUP.md)
-- **Full repo**: https://github.com/Imbad0202/academic-research-skills
+V2 of this app (before the `V3.0.0.1` tag) integrated the [Academic Research Skills](https://github.com/Imbad0202/academic-research-skills) plugin, originally created by **Cheng-I Wu** and licensed under **CC-BY-NC 4.0**. That integration was removed in V3.0.0.1 and replaced with Atlas Plan, an original implementation — see "Acknowledgments and prior art" above. Releases tagged before `V3.0.0.1` keep their ARS attribution and remain subject to CC-BY-NC 4.0 for that integrated code.
