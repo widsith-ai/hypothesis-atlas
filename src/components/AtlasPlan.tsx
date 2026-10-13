@@ -41,6 +41,10 @@ interface CachedPlan {
   savedAt: number;
 }
 
+/** A claim while it's being edited, tagged with which original claim (if any) it came from — see startEditing/finishEditing. */
+type DraftClaim = GroundedPlanClaim & { _origIndex?: number };
+type DraftPlan = Omit<AtlasPlanResult, "claims"> & { claims: DraftClaim[] };
+
 /** #63 (V3.0.0.1): the Atlas-native replacement for ARSPlanChat.tsx. A results view, not a chat — Atlas Plan drafts directly from the hypothesis and its sources rather than interrogating the researcher turn by turn. #64 (V3.0.0.2): every section is editable, and each claim shows the passages it was checked against. */
 function makeCacheKey(jobId: string, ideaTitle?: string): string {
   const slug = (ideaTitle ?? "default").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
@@ -136,7 +140,7 @@ export default function AtlasPlan({ jobId, topicQuery, selectedIdea, referenceDo
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CachedPlan | null>(null);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<AtlasPlanResult | null>(null);
+  const [draft, setDraft] = useState<DraftPlan | null>(null);
   const [openEvidence, setOpenEvidence] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -182,7 +186,13 @@ export default function AtlasPlan({ jobId, topicQuery, selectedIdea, referenceDo
 
   const startEditing = () => {
     if (!result) return;
-    setDraft(structuredClone(result.plan));
+    const cloned = structuredClone(result.plan);
+    // Tag each claim with its origin index before anything is edited, so finishEditing can
+    // tell "this is claim #2, maybe retyped" from "this is a new claim that happens to read
+    // the same as claim #2" — structuredClone breaks object identity, and matching by text
+    // alone would hand a new/changed claim someone else's stale grounding on a collision.
+    cloned.claims = cloned.claims.map((c, i) => ({ ...c, _origIndex: i }));
+    setDraft(cloned);
     setOpenEvidence(null);
     setEditing(true);
   };
@@ -193,9 +203,10 @@ export default function AtlasPlan({ jobId, topicQuery, selectedIdea, referenceDo
     const claims = draft.claims
       .filter((c) => c.text.trim())
       .map((c) => {
-        const original = before.find((b) => b.text === c.text);
+        const { _origIndex, ...rest } = c as DraftClaim;
+        const original = typeof _origIndex === "number" ? before[_origIndex] : undefined;
         // A claim whose text changed no longer matches the passages it was checked against.
-        return original ? original : { ...c, text: c.text.trim(), edited: true, evidence: [] };
+        return original && original.text === rest.text.trim() ? original : { ...rest, text: rest.text.trim(), edited: true, evidence: [] };
       });
     save(
       {
@@ -212,6 +223,11 @@ export default function AtlasPlan({ jobId, topicQuery, selectedIdea, referenceDo
     setDraft(null);
   };
 
+  // Must match MAX_RECHECK_CLAIMS in api/jobs/[id]/plan/route.ts — the server truncates a
+  // single request to this many claims, so more than this needs multiple requests or claims
+  // past the cap silently stay "edited – not re-checked" with no indication anything was cut.
+  const RECHECK_BATCH_SIZE = 10;
+
   const recheckEdited = async () => {
     if (!result) return;
     const editedIndexes = result.plan.claims.flatMap((c, i) => (c.edited ? [i] : []));
@@ -219,24 +235,29 @@ export default function AtlasPlan({ jobId, topicQuery, selectedIdea, referenceDo
     setChecking(true);
     setError(null);
     try {
-      const res = await fetch(`/api/jobs/${jobId}/plan`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "ground",
-          extraSources,
-          claims: editedIndexes.map((i) => result.plan.claims[i]),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !Array.isArray(data.claims)) {
-        setError(data.error ?? "Could not re-check the edited claims.");
-        return;
-      }
       const claims = [...result.plan.claims];
-      editedIndexes.forEach((claimIndex, k) => {
-        if (data.claims[k]) claims[claimIndex] = data.claims[k];
-      });
+      for (let start = 0; start < editedIndexes.length; start += RECHECK_BATCH_SIZE) {
+        const batch = editedIndexes.slice(start, start + RECHECK_BATCH_SIZE);
+        const res = await fetch(`/api/jobs/${jobId}/plan`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "ground",
+            extraSources,
+            claims: batch.map((i) => claims[i]),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !Array.isArray(data.claims)) {
+          // Keep whatever batches already succeeded instead of discarding them.
+          save({ ...result.plan, claims }, result.mode);
+          setError(data.error ?? "Could not re-check the edited claims.");
+          return;
+        }
+        batch.forEach((claimIndex, k) => {
+          if (data.claims[k]) claims[claimIndex] = data.claims[k];
+        });
+      }
       save({ ...result.plan, claims }, result.mode);
     } catch {
       setError("Could not reach the planning assistant. Please try again.");
@@ -257,7 +278,7 @@ export default function AtlasPlan({ jobId, topicQuery, selectedIdea, referenceDo
   };
 
   const plan = editing && draft ? draft : result?.plan ?? null;
-  const updateDraft = (patch: Partial<AtlasPlanResult>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+  const updateDraft = (patch: Partial<DraftPlan>) => setDraft((d) => (d ? { ...d, ...patch } : d));
   const editedCount = result?.plan.claims.filter((c) => c.edited).length ?? 0;
 
   return (

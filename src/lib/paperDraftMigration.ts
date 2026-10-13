@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
+import { buildPlanExportMarkdown, type AtlasPlan } from '@/lib/atlasPlanExport'
 
 /**
  * #63 (V3.0.0.1): pure extraction logic for PaperReviewPanel.tsx's "current
@@ -39,12 +40,21 @@ export function extractLegacyArsDraft(raw: string | null): ExtractedDraft | null
   }
 }
 
+/**
+ * #64 (V3.0.0.2): AtlasPlan.tsx's cache stores the structured plan, not a
+ * pre-built export (the export is now rebuilt client-side so edits don't
+ * need a round trip) — this rebuilds the same way, with a placeholder title
+ * since the cached entry doesn't carry the job's topic. The title line is
+ * cosmetic; what the review panel needs is the claims/outline body below it.
+ */
 export function extractAtlasPlanDraft(raw: string | null): ExtractedDraft | null {
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw)
-    const text: string | undefined = parsed.exportMarkdown
-    if (!text?.trim()) return null
+    const plan = parsed.plan as AtlasPlan | undefined
+    const hasContent = !!(plan?.contributionStatement || plan?.claims?.length || plan?.outline?.length || plan?.methodAndDataPlan)
+    if (!plan || !hasContent) return null
+    const text = buildPlanExportMarkdown('Untitled', plan)
     return { text, savedAt: typeof parsed.savedAt === 'number' ? parsed.savedAt : 0 }
   } catch {
     return null

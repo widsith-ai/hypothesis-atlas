@@ -26,15 +26,21 @@ describe('extractLegacyArsDraft', () => {
 })
 
 describe('extractAtlasPlanDraft', () => {
-  it('returns null for missing input or a missing export', () => {
+  it('returns null for missing input, a missing plan, or an empty plan', () => {
     expect(extractAtlasPlanDraft(null)).toBeNull()
     expect(extractAtlasPlanDraft(JSON.stringify({ savedAt: 1 }))).toBeNull()
-    expect(extractAtlasPlanDraft(JSON.stringify({ exportMarkdown: '  ', savedAt: 1 }))).toBeNull()
+    expect(extractAtlasPlanDraft(JSON.stringify({ plan: { claims: [], outline: [] }, savedAt: 1 }))).toBeNull()
   })
 
-  it('reads the export markdown and saved time', () => {
-    const raw = JSON.stringify({ exportMarkdown: '# Plan', savedAt: 99 })
-    expect(extractAtlasPlanDraft(raw)).toEqual({ text: '# Plan', savedAt: 99 })
+  it('rebuilds the export from the cached structured plan, not a stored export string', () => {
+    const raw = JSON.stringify({
+      plan: { contributionStatement: 'We show X.', claims: [], methodAndDataPlan: null, threatsToValidity: [], outline: ['Intro'] },
+      savedAt: 99,
+    })
+    const result = extractAtlasPlanDraft(raw)
+    expect(result?.savedAt).toBe(99)
+    expect(result?.text).toContain('We show X.')
+    expect(result?.text).toContain('1. Intro')
   })
 })
 
