@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { groq } from '@/lib/groq'
+import type { AtlasPlan, GroundedPlanClaim, PlanMode } from '@/lib/atlasPlanExport'
 import {
   createPaperDocument,
   groundReviewClaims,
-  type GroundedReviewClaim,
   type ReviewClaimInput,
 } from '@/lib/review-grounding'
 
@@ -18,7 +18,8 @@ import {
  * re-derives or reuses ARS prompt wording.
  */
 
-export type PlanMode = 'plan' | 'outline'
+export type { PlanMode, PlanEvidence, GroundedPlanClaim, AtlasPlan } from '@/lib/atlasPlanExport'
+export { buildPlanExportMarkdown } from '@/lib/atlasPlanExport'
 
 export interface PlanSourceInput {
   title: string
@@ -38,22 +39,37 @@ export interface RawAtlasPlan {
   outline: string[]
 }
 
-export interface GroundedPlanClaim {
-  text: string
-  citedSourceTitles: string[]
-  /** False when the model cited a title that isn't in the source list it was given — caught before grounding even runs. */
-  citationsVerified: boolean
-  grounding: GroundedReviewClaim['grounding']
-}
+const MAX_EXTRA_SOURCES = 20
+const MAX_TITLE_LENGTH = 300
+const MAX_SNIPPET_LENGTH = 1500
 
-export interface AtlasPlan {
-  mode: PlanMode
-  contributionStatement: string | null
-  claims: GroundedPlanClaim[]
-  methodAndDataPlan: string | null
-  threatsToValidity: string[]
-  outline: string[]
-  available: boolean
+/**
+ * #64: papers the researcher collected on the Setup step are sent by the
+ * browser, so they're untrusted input — keep only well-formed entries, cap
+ * their count and length, and let the job's own peer-reviewed sources win on
+ * a title collision.
+ */
+export function mergePlanSources(dbSources: PlanSourceInput[], extra: unknown): PlanSourceInput[] {
+  const merged: PlanSourceInput[] = []
+  const seen = new Set<string>()
+  const add = (title: string, snippet: string | null) => {
+    const key = title.trim().toLowerCase()
+    if (!key || seen.has(key)) return
+    seen.add(key)
+    merged.push({ title: title.trim(), snippet })
+  }
+
+  for (const s of dbSources) add(s.title, s.snippet)
+
+  const extraList = Array.isArray(extra) ? extra.slice(0, MAX_EXTRA_SOURCES) : []
+  for (const item of extraList) {
+    const entry = item as Record<string, unknown> | null
+    if (typeof entry?.title !== 'string') continue
+    const snippet = typeof entry.snippet === 'string' && entry.snippet.trim() ? entry.snippet.trim().slice(0, MAX_SNIPPET_LENGTH) : null
+    add(entry.title.slice(0, MAX_TITLE_LENGTH), snippet)
+  }
+
+  return merged
 }
 
 const MODEL = 'openai/gpt-oss-120b'
@@ -137,8 +153,21 @@ export function parseRawPlan(raw: string, mode: PlanMode): RawAtlasPlan {
 /** Builds the grounding document from the same peer-reviewed sources the plan was asked to cite — a claim is only "grounded" if it actually holds up against this text, not just because the model said so. */
 export async function groundPlanClaims(claims: RawPlanClaim[], sources: PlanSourceInput[]): Promise<GroundedPlanClaim[]> {
   const validTitles = new Set(sources.map((s) => s.title))
-  const documentText = sources.map((s) => `## ${s.title}\n${s.snippet ?? ''}`).join('\n\n')
-  const document = createPaperDocument(documentText)
+
+  // Remember where each source starts in the joined text, so a matched passage can be labelled with the source it came from.
+  const blocks = sources.map((s) => `## ${s.title}\n${s.snippet ?? ''}`)
+  const blockStarts: number[] = []
+  let offset = 0
+  for (const block of blocks) {
+    blockStarts.push(offset)
+    offset += block.length + 2
+  }
+  const document = createPaperDocument(blocks.join('\n\n'))
+  const sourceTitleAt = (position: number): string | null => {
+    let index = -1
+    for (let i = 0; i < blockStarts.length && blockStarts[i] <= position; i++) index = i
+    return index >= 0 ? sources[index].title : null
+  }
 
   const reviewInputs: ReviewClaimInput[] = claims.map((c) => ({
     category: 'strength',
@@ -154,6 +183,7 @@ export async function groundPlanClaims(claims: RawPlanClaim[], sources: PlanSour
     citedSourceTitles: claim.citedSourceTitles,
     citationsVerified: claim.citedSourceTitles.every((t) => validTitles.has(t)),
     grounding: grounded[i]?.grounding ?? { status: 'unavailable', confidence: null, method: 'unavailable', overlapScore: 0 },
+    evidence: (grounded[i]?.sourceSpans ?? []).map((span) => ({ sourceTitle: sourceTitleAt(span.start), text: span.text })),
   }))
 }
 
@@ -191,37 +221,4 @@ export async function generateAtlasPlan(
     outline: raw.outline,
     available: true,
   }
-}
-
-/** The neutral Markdown export — works with any agent, not tied to one plugin. */
-export function buildPlanExportMarkdown(topicQuery: string, plan: AtlasPlan): string {
-  const lines: string[] = [`# Research Plan: ${topicQuery}`, '']
-
-  if (plan.contributionStatement) {
-    lines.push('## Contribution', plan.contributionStatement, '')
-  }
-
-  if (plan.claims.length) {
-    lines.push('## Claims to support')
-    for (const c of plan.claims) {
-      const badge = c.grounding.status === 'grounded' ? '[grounded]' : c.grounding.status === 'contradicted' ? '[contradicted]' : '[unsupported]'
-      const cites = c.citedSourceTitles.length ? ` — sources: ${c.citedSourceTitles.join('; ')}` : ''
-      lines.push(`- ${badge} ${c.text}${cites}`)
-    }
-    lines.push('')
-  }
-
-  if (plan.methodAndDataPlan) {
-    lines.push('## Method and data plan', plan.methodAndDataPlan, '')
-  }
-
-  if (plan.threatsToValidity.length) {
-    lines.push('## Threats to validity', ...plan.threatsToValidity.map((t) => `- ${t}`), '')
-  }
-
-  if (plan.outline.length) {
-    lines.push('## Outline', ...plan.outline.map((o, i) => `${i + 1}. ${o}`), '')
-  }
-
-  return lines.join('\n')
 }

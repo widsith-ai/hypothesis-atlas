@@ -10,7 +10,8 @@ vi.mock('@/lib/review-grounding', async () => {
   return { ...actual, groundReviewClaims: groundReviewClaimsMock }
 })
 
-import { parseRawPlan, buildPlanExportMarkdown, groundPlanClaims, generateAtlasPlan } from './atlasPlan'
+import { parseRawPlan, buildPlanExportMarkdown, groundPlanClaims, generateAtlasPlan, mergePlanSources } from './atlasPlan'
+import { createPaperDocument } from './review-grounding'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -76,6 +77,27 @@ describe('groundPlanClaims', () => {
     expect(result[0].citationsVerified).toBe(true)
   })
 
+  it('labels each matched passage with the source it came from', async () => {
+    const sources = [
+      { title: 'First paper', snippet: 'Alpha results were strong.' },
+      { title: 'Second paper', snippet: 'Beta results were weak.' },
+    ]
+    // Pick real spans out of the same document groundPlanClaims builds, so the offsets are genuine.
+    const doc = createPaperDocument(sources.map((s) => `## ${s.title}\n${s.snippet}`).join('\n\n'))
+    const alpha = doc.spans.find((s) => s.text.includes('Alpha'))!
+    const beta = doc.spans.find((s) => s.text.includes('Beta'))!
+    groundReviewClaimsMock.mockResolvedValue([
+      { sourceSpans: [beta, alpha], grounding: { status: 'grounded', confidence: 0.9, method: 'nli', overlapScore: 0.6 } },
+    ])
+
+    const result = await groundPlanClaims([{ text: 'Claim', citedSourceTitles: [] }], sources)
+
+    expect(result[0].evidence).toEqual([
+      { sourceTitle: 'Second paper', text: beta.text },
+      { sourceTitle: 'First paper', text: alpha.text },
+    ])
+  })
+
   it('skips the grounding call entirely when there are no claims', async () => {
     const result = await groundPlanClaims([], [{ title: 'X', snippet: null }])
     expect(result).toEqual([])
@@ -120,5 +142,47 @@ describe('buildPlanExportMarkdown', () => {
     expect(md).toContain('[grounded] Claim A')
     expect(md).toContain('sources: Paper One')
     expect(md).toContain('1. Intro')
+  })
+})
+
+describe('mergePlanSources', () => {
+  it('keeps database sources first and drops case-insensitive duplicate titles', () => {
+    const merged = mergePlanSources(
+      [{ title: 'Paper One', snippet: 'db' }],
+      [{ title: ' paper one ', snippet: 'client' }, { title: 'Paper Two', snippet: 'two' }]
+    )
+    expect(merged).toEqual([{ title: 'Paper One', snippet: 'db' }, { title: 'Paper Two', snippet: 'two' }])
+  })
+
+  it('ignores malformed client entries and a non-array payload', () => {
+    expect(mergePlanSources([], 'nope')).toEqual([])
+    expect(mergePlanSources([], [null, 42, { snippet: 'no title' }, { title: '   ' }, { title: 'Ok', snippet: 5 }])).toEqual([
+      { title: 'Ok', snippet: null },
+    ])
+  })
+
+  it('caps how many client sources are accepted and how long their text can be', () => {
+    const extra = Array.from({ length: 30 }, (_, i) => ({ title: `T${i}`, snippet: 'x'.repeat(5000) }))
+    const merged = mergePlanSources([], extra)
+    expect(merged).toHaveLength(20)
+    expect(merged[0].snippet).toHaveLength(1500)
+  })
+})
+
+describe('buildPlanExportMarkdown with edits', () => {
+  it('exports an edited claim as unchecked rather than with its stale verdict', () => {
+    const md = buildPlanExportMarkdown('T', {
+      mode: 'plan',
+      contributionStatement: null,
+      claims: [
+        { text: 'Rewritten claim', citedSourceTitles: [], citationsVerified: true, edited: true, grounding: { status: 'grounded', confidence: 0.9, method: 'nli', overlapScore: 0.5 } },
+      ],
+      methodAndDataPlan: null,
+      threatsToValidity: [],
+      outline: [],
+      available: true,
+    })
+    expect(md).toContain('- [unchecked] Rewritten claim')
+    expect(md).not.toContain('[grounded]')
   })
 })

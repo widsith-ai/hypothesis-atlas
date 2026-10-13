@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { generateWithGroq } from '@/lib/groq'
 
 export async function POST(
   request: NextRequest,
@@ -39,46 +38,7 @@ export async function POST(
       return NextResponse.json({ exportContext })
     }
 
-    if (stage === 'outline') {
-      const primaryIdea = ideas[0]
-      const prompt = `You are an academic paper planner. Generate a detailed IMRaD-style paper outline for the following research idea.
-
-RESEARCH TOPIC: ${job.topicQuery}
-PRIMARY RESEARCH IDEA: ${primaryIdea ? primaryIdea.title : job.topicQuery}
-PROBLEM: ${primaryIdea ? primaryIdea.problem_to_solve : ''}
-METHODS: ${primaryIdea ? primaryIdea.proposed_method.join('; ') : ''}
-
-KEY LITERATURE:
-${peerSources}
-
-Generate a paper outline with:
-- Title (compelling academic title)
-- Abstract (3-sentence structure: background, gap, contribution)
-- Introduction sections (3-4 subsections with key points for each)
-- Methods sections (3-4 subsections)
-- Results/Expected Findings sections (3-4 subsections)
-- Discussion sections (2-3 subsections including limitations)
-- Conclusion (1-2 sentences)
-- Key References (list 5 from the literature above)
-
-RESPOND AS JSON:
-{
-  "title": "...",
-  "abstract": "...",
-  "sections": [
-    { "name": "Introduction", "subsections": [{ "heading": "...", "keyPoints": ["...", "..."] }] },
-    { "name": "Methods", "subsections": [...] },
-    { "name": "Results", "subsections": [...] },
-    { "name": "Discussion", "subsections": [...] },
-    { "name": "Conclusion", "subsections": [{ "heading": "Conclusion", "keyPoints": ["..."] }] }
-  ],
-  "keyReferences": ["...", "..."]
-}`
-
-      const outline = await generateWithGroq(prompt)
-      return NextResponse.json({ outline })
-    }
-
+    // The separate 'outline' stage was removed in #64 — Atlas Plan's outline mode replaces it.
     return NextResponse.json({ error: 'Unknown stage' }, { status: 400 })
   } catch (error) {
     console.error('Paper pipeline error:', error)
