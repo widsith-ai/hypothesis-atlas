@@ -1,5 +1,6 @@
 import { prisma } from './prisma'
 import { emitProgressEvent } from './events'
+import { resolveWorkspaceId } from './graphAccess'
 
 export const ENTITY_TYPES = ['topic', 'hypothesis', 'method', 'evidence', 'gap', 'note'] as const
 export const EDGE_TYPES = [
@@ -52,16 +53,21 @@ interface UpsertEntityOpts {
   content?: string | null
   jobId?: string | null
   syncKey: string
+  workspaceId: string
 }
 
-// Upsert keyed on syncKey. System-origin entities get refreshed; user-edited
-// ones (origin flipped to 'user') are left untouched so edits survive re-syncs.
+// Upsert keyed on (workspaceId, syncKey) — #54/V3.0.1: syncKey alone used to
+// be globally unique, so two users' entities with the same label collided
+// into one record. System-origin entities get refreshed; user-edited ones
+// (origin flipped to 'user') are left untouched so edits survive re-syncs.
 async function upsertEntity(opts: UpsertEntityOpts) {
   const label = opts.label.trim().slice(0, 200)
   if (!label) return null
   const content = opts.content?.trim().slice(0, 4000) || null
 
-  const existing = await prisma.graphEntity.findUnique({ where: { syncKey: opts.syncKey } })
+  const existing = await prisma.graphEntity.findUnique({
+    where: { workspaceId_syncKey: { workspaceId: opts.workspaceId, syncKey: opts.syncKey } },
+  })
   if (existing) {
     if (existing.origin === 'system' && (existing.label !== label || existing.content !== content)) {
       return prisma.graphEntity.update({ where: { id: existing.id }, data: { label, content } })
@@ -77,16 +83,17 @@ async function upsertEntity(opts: UpsertEntityOpts) {
       jobId: opts.jobId ?? null,
       origin: 'system',
       syncKey: opts.syncKey,
+      workspaceId: opts.workspaceId,
     },
   })
 }
 
-async function upsertEdge(fromId: string, toId: string, type: EdgeType, jobId?: string | null) {
+async function upsertEdge(fromId: string, toId: string, type: EdgeType, workspaceId: string, jobId?: string | null) {
   if (fromId === toId) return
   await prisma.graphEdge.upsert({
     where: { fromId_toId_type: { fromId, toId, type } },
     update: {},
-    create: { fromId, toId, type, jobId: jobId ?? null, origin: 'system' },
+    create: { fromId, toId, type, jobId: jobId ?? null, origin: 'system', workspaceId },
   })
 }
 
@@ -111,9 +118,10 @@ async function linkSources(entityId: string, sourceIds: string[]) {
 export async function syncJobGraph(jobId: string): Promise<{ entities: number; edges: number }> {
   const job = await prisma.job.findUnique({
     where: { id: jobId },
-    select: { id: true, topicQuery: true, rootNodeId: true },
+    select: { id: true, topicQuery: true, rootNodeId: true, userId: true },
   })
   if (!job) return { entities: 0, edges: 0 }
+  const workspaceId = resolveWorkspaceId(job.userId)
 
   const nodes = await prisma.node.findMany({
     where: { jobId },
@@ -140,6 +148,7 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
       label: rootNode.label,
       content: rootNode.summary,
       jobId,
+      workspaceId,
       syncKey: globalSyncKey('topic', rootNode.label),
     })
   )
@@ -164,11 +173,12 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           label: rootMethods[i],
           content: null,
           jobId,
+          workspaceId,
           syncKey: globalSyncKey('method', rootMethods[i]),
         })
       )
       if (method) {
-        await upsertEdge(topicEntity.id, method.id, 'uses_method', jobId)
+        await upsertEdge(topicEntity.id, method.id, 'uses_method', workspaceId, jobId)
         edgeCount++
       }
     }
@@ -180,11 +190,12 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           label: rootFindings[i],
           content: null,
           jobId,
+          workspaceId,
           syncKey: globalSyncKey('evidence', rootFindings[i]),
         })
       )
       if (evidence) {
-        await upsertEdge(topicEntity.id, evidence.id, 'provides', jobId)
+        await upsertEdge(topicEntity.id, evidence.id, 'provides', workspaceId, jobId)
         await linkSources(evidence.id, sourceIdsFor(rootNode))
         edgeCount++
       }
@@ -197,11 +208,12 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           label: rootGaps[i],
           content: null,
           jobId,
+          workspaceId,
           syncKey: globalSyncKey('gap', rootGaps[i]),
         })
       )
       if (gap) {
-        await upsertEdge(topicEntity.id, gap.id, 'reveals', jobId)
+        await upsertEdge(topicEntity.id, gap.id, 'reveals', workspaceId, jobId)
         edgeCount++
       }
     }
@@ -213,11 +225,12 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           label: rootDisagreements[i],
           content: null,
           jobId,
+          workspaceId,
           syncKey: globalSyncKey('evidence', rootDisagreements[i]),
         })
       )
       if (counter) {
-        await upsertEdge(counter.id, topicEntity.id, 'contradicts', jobId)
+        await upsertEdge(counter.id, topicEntity.id, 'contradicts', workspaceId, jobId)
         edgeCount++
       }
     }
@@ -231,13 +244,14 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
         label: child.label,
         content: child.summary,
         jobId,
+        workspaceId,
         syncKey: globalSyncKey('hypothesis', child.label),
       })
     )
     if (!hypothesis) continue
 
     if (topicEntity) {
-      await upsertEdge(topicEntity.id, hypothesis.id, 'motivates', jobId)
+      await upsertEdge(topicEntity.id, hypothesis.id, 'motivates', workspaceId, jobId)
       edgeCount++
     }
     await linkSources(hypothesis.id, sourceIdsFor(child))
@@ -250,11 +264,12 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           label: findings[i],
           content: null,
           jobId,
+          workspaceId,
           syncKey: globalSyncKey('evidence', findings[i]),
         })
       )
       if (evidence) {
-        await upsertEdge(hypothesis.id, evidence.id, 'provides', jobId)
+        await upsertEdge(hypothesis.id, evidence.id, 'provides', workspaceId, jobId)
         await linkSources(evidence.id, sourceIdsFor(child))
         edgeCount++
       }
@@ -268,11 +283,12 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           label: gaps[i],
           content: null,
           jobId,
+          workspaceId,
           syncKey: globalSyncKey('gap', gaps[i]),
         })
       )
       if (gap) {
-        await upsertEdge(hypothesis.id, gap.id, 'reveals', jobId)
+        await upsertEdge(hypothesis.id, gap.id, 'reveals', workspaceId, jobId)
         edgeCount++
       }
     }
@@ -285,17 +301,18 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           label: disagreements[i],
           content: null,
           jobId,
+          workspaceId,
           syncKey: globalSyncKey('evidence', disagreements[i]),
         })
       )
       if (counter) {
-        await upsertEdge(counter.id, hypothesis.id, 'contradicts', jobId)
+        await upsertEdge(counter.id, hypothesis.id, 'contradicts', workspaceId, jobId)
         edgeCount++
       }
     }
   }
 
-  const dedupe = await dedupeGraph()
+  const dedupe = await dedupeGraph(workspaceId)
 
   await emitProgressEvent({
     jobId,
@@ -318,24 +335,32 @@ interface DedupeCandidate {
   origin: string
   pinned: boolean
   syncKey: string | null
+  workspaceId: string
   createdAt: Date
 }
 
 /**
- * Collapses entities that share (type, normalized label) into a single node:
- * edges and source links are re-pointed to the canonical entity, duplicates are
- * deleted (cascades clean up their originals). Notes are exempt — they are
- * timestamped session memory, not concepts. Groups made up purely of
- * user-created entities are left alone (deliberate duplicates).
- * Also rewrites syncKeys to the global label-based scheme so pre-existing
- * per-job entities converge on the next sync. Idempotent.
+ * Collapses entities that share (workspace, type, normalized label) into a
+ * single node: edges and source links are re-pointed to the canonical
+ * entity, duplicates are deleted (cascades clean up their originals). Notes
+ * are exempt — they are timestamped session memory, not concepts. Groups
+ * made up purely of user-created entities are left alone (deliberate
+ * duplicates). Also rewrites syncKeys to the global label-based scheme so
+ * pre-existing per-job entities converge on the next sync. Idempotent.
+ *
+ * #54/V3.0.1: the grouping key always includes workspaceId — two different
+ * workspaces' entities sharing a label must never merge into one, even when
+ * `workspaceId` is omitted and this scans every workspace (the `syncJobGraph`
+ * caller always scopes to its own workspace via the `workspaceId` param;
+ * an unscoped call is for maintenance/admin use, not exposed to any route).
  */
-export async function dedupeGraph(): Promise<{
+export async function dedupeGraph(workspaceId?: string): Promise<{
   normalized: number
   groups: number
   merged: number
 }> {
   const entities = await prisma.graphEntity.findMany({
+    where: workspaceId ? { workspaceId } : undefined,
     select: {
       id: true,
       type: true,
@@ -344,6 +369,7 @@ export async function dedupeGraph(): Promise<{
       origin: true,
       pinned: true,
       syncKey: true,
+      workspaceId: true,
       createdAt: true,
     },
     orderBy: { createdAt: 'asc' },
@@ -352,7 +378,7 @@ export async function dedupeGraph(): Promise<{
   const groups = new Map<string, DedupeCandidate[]>()
   for (const e of entities) {
     if (e.type === 'note') continue
-    const key = `${e.type}:${normalizeLabel(e.label)}`
+    const key = `${e.workspaceId}:${e.type}:${normalizeLabel(e.label)}`
     const list = groups.get(key) ?? []
     list.push(e)
     groups.set(key, list)
@@ -409,7 +435,7 @@ export async function dedupeGraph(): Promise<{
         await prisma.graphEdge.upsert({
           where: { fromId_toId_type: { fromId, toId, type: edge.type } },
           update: {},
-          create: { fromId, toId, type: edge.type, jobId: edge.jobId, origin: edge.origin },
+          create: { fromId, toId, type: edge.type, jobId: edge.jobId, origin: edge.origin, workspaceId: canonical.workspaceId },
         })
       } catch {
         // Concurrent writer hit the same compound key — the edge exists either way.
@@ -436,10 +462,15 @@ export async function dedupeGraph(): Promise<{
   return { normalized, groups: groupsMerged, merged }
 }
 
-/** Backfill every completed job into the graph (idempotent). */
-export async function syncAllJobs(): Promise<{ jobs: number; entities: number; edges: number }> {
+/**
+ * Backfill completed jobs into the graph (idempotent). #54/V3.0.1: optionally
+ * scoped to one owner (`userId: string | null`, matching Job.userId) so a
+ * route can backfill "my jobs" without touching every tenant's data; omitted
+ * entirely, this still means "every completed job" for internal/background use.
+ */
+export async function syncAllJobs(where?: { userId?: string | null }): Promise<{ jobs: number; entities: number; edges: number }> {
   const jobs = await prisma.job.findMany({
-    where: { status: 'completed' },
+    where: { status: 'completed', ...(where ?? {}) },
     select: { id: true },
     orderBy: { createdAt: 'asc' },
   })

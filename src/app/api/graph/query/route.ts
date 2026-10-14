@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { authOptions } from '@/lib/auth'
 import { generateWithGroq } from '@/lib/groq'
+import { resolveWorkspaceId, graphVisibilityWhere } from '@/lib/graphAccess'
 
 const MAX_CONTEXT_ENTITIES = 60
 const MAX_SOURCE_LINES = 15
@@ -32,12 +35,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Query is required' }, { status: 400 })
     }
 
+    // #54/V3.0.1: this query used to search and synthesize across every
+    // tenant's graph. Now scoped to what the viewer can actually see.
+    const session = await getServerSession(authOptions)
+    const viewerWorkspaceId = resolveWorkspaceId(session?.user?.id)
+    const viewerAuthenticated = !!session?.user?.id
+    const visibility = graphVisibilityWhere(viewerWorkspaceId, viewerAuthenticated)
+
     const escaped = query.replace(/[\\%_]/g, (c: string) => `\\${c}`)
     const matches = await prisma.graphEntity.findMany({
       where: {
-        OR: [
-          { label: { contains: escaped, mode: 'insensitive' } },
-          { content: { contains: escaped, mode: 'insensitive' } },
+        AND: [
+          visibility,
+          {
+            OR: [
+              { label: { contains: escaped, mode: 'insensitive' } },
+              { content: { contains: escaped, mode: 'insensitive' } },
+            ],
+          },
         ],
       },
       take: 20,
@@ -65,13 +80,18 @@ export async function POST(request: NextRequest) {
       neighborIds.add(edge.toId)
     }
 
+    // `neighborIds` was discovered via edges without a visibility check — filter the
+    // fetch itself so a neighbor the viewer can't see never enters the subgraph.
     const subgraphEntities = await prisma.graphEntity.findMany({
-      where: { id: { in: [...neighborIds] } },
+      where: { AND: [visibility, { id: { in: [...neighborIds] } }] },
       take: MAX_CONTEXT_ENTITIES,
     })
 
+    // An edge only belongs in the subgraph if both endpoints survived the visibility
+    // filter above — not just the pre-filter `neighborIds` they were discovered from.
+    const visibleIds = new Set(subgraphEntities.map((e) => e.id))
     const subgraphEdges = neighborEdges.filter(
-      (e) => neighborIds.has(e.fromId) && neighborIds.has(e.toId)
+      (e) => visibleIds.has(e.fromId) && visibleIds.has(e.toId)
     )
 
     const entitySourceLinks = await prisma.entitySource.findMany({

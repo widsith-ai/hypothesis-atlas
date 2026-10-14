@@ -61,7 +61,7 @@ describe('syncJobGraph', () => {
   })
 
   it('creates a topic entity and links methods/findings for a root-only job', async () => {
-    prismaMock.job.findUnique.mockResolvedValue({ id: 'job-1', topicQuery: 'topic', rootNodeId: 'node-1' })
+    prismaMock.job.findUnique.mockResolvedValue({ id: 'job-1', topicQuery: 'topic', rootNodeId: 'node-1', userId: null })
     prismaMock.node.findMany.mockResolvedValue([
       {
         id: 'node-1',
@@ -87,6 +87,42 @@ describe('syncJobGraph', () => {
     expect(result.edges).toBe(2) // uses_method + provides
     expect(prismaMock.graphEntity.create).toHaveBeenCalledTimes(3)
     expect(prismaMock.progressEvent.create).toHaveBeenCalled()
+  })
+
+  it('#54/V3.0.1: stamps every created entity and edge with the job owner\'s workspace, "default" for an anonymous job', async () => {
+    prismaMock.job.findUnique.mockResolvedValue({ id: 'job-1', topicQuery: 'topic', rootNodeId: 'node-1', userId: null })
+    prismaMock.node.findMany.mockResolvedValue([
+      { id: 'node-1', depth: 0, label: 'Topic', summary: 'Summary', methodsJson: null, findingsJson: null, openProblemsJson: null, disagreementsJson: null, nodeSources: [] },
+    ])
+    prismaMock.graphEntity.findUnique.mockResolvedValue(null)
+    prismaMock.graphEntity.create.mockImplementation(async ({ data }: any) => ({ id: `entity-${data.label}`, ...data }))
+    prismaMock.graphEntity.findMany.mockResolvedValue([])
+
+    await syncJobGraph('job-1')
+
+    expect(prismaMock.graphEntity.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ workspaceId: 'default' }) })
+    )
+  })
+
+  it('#54/V3.0.1: uses the job owner\'s user id as the workspace when the job is owned', async () => {
+    prismaMock.job.findUnique.mockResolvedValue({ id: 'job-1', topicQuery: 'topic', rootNodeId: 'node-1', userId: 'user-1' })
+    prismaMock.node.findMany.mockResolvedValue([
+      { id: 'node-1', depth: 0, label: 'Topic', summary: 'Summary', methodsJson: null, findingsJson: null, openProblemsJson: null, disagreementsJson: null, nodeSources: [] },
+    ])
+    prismaMock.graphEntity.findUnique.mockResolvedValue(null)
+    prismaMock.graphEntity.create.mockImplementation(async ({ data }: any) => ({ id: `entity-${data.label}`, ...data }))
+    prismaMock.graphEntity.findMany.mockResolvedValue([])
+
+    await syncJobGraph('job-1')
+
+    expect(prismaMock.graphEntity.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ workspaceId: 'user-1' }) })
+    )
+    // The compound-unique lookup must be scoped to that same workspace, not a bare syncKey.
+    expect(prismaMock.graphEntity.findUnique).toHaveBeenCalledWith({
+      where: { workspaceId_syncKey: { workspaceId: 'user-1', syncKey: 'g:topic:topic' } },
+    })
   })
 
   it('leaves an existing system-origin entity untouched when unchanged', async () => {
@@ -125,6 +161,7 @@ describe('dedupeGraph', () => {
       origin: 'system',
       pinned: false,
       syncKey: 'job:method:simulation',
+      workspaceId: 'default',
       createdAt: new Date('2024-01-01'),
     }
     const newer = {
@@ -135,6 +172,7 @@ describe('dedupeGraph', () => {
       origin: 'system',
       pinned: true,
       syncKey: 'job:method:simulation-2',
+      workspaceId: 'default',
       createdAt: new Date('2024-01-02'),
     }
     prismaMock.graphEntity.findMany.mockResolvedValue([older, newer])
@@ -150,14 +188,36 @@ describe('dedupeGraph', () => {
   })
 
   it('skips groups made up entirely of user-created entities', async () => {
-    const a = { id: 'e1', type: 'note', label: 'dup', content: null, origin: 'user', pinned: false, syncKey: null, createdAt: new Date() }
-    const b = { id: 'e2', type: 'method', label: 'dup', content: null, origin: 'user', pinned: false, syncKey: null, createdAt: new Date() }
+    const a = { id: 'e1', type: 'note', label: 'dup', content: null, origin: 'user', pinned: false, syncKey: null, workspaceId: 'default', createdAt: new Date() }
+    const b = { id: 'e2', type: 'method', label: 'dup', content: null, origin: 'user', pinned: false, syncKey: null, workspaceId: 'default', createdAt: new Date() }
     prismaMock.graphEntity.findMany.mockResolvedValue([a, b])
 
     const result = await dedupeGraph()
 
     expect(result.merged).toBe(0)
     expect(prismaMock.graphEntity.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it("#54/V3.0.1: never merges two workspaces' entities sharing a type and label", async () => {
+    const mine = { id: 'e1', type: 'method', label: 'Simulation', content: null, origin: 'system', pinned: false, syncKey: 'g:method:simulation', workspaceId: 'user-1', createdAt: new Date('2024-01-01') }
+    const theirs = { id: 'e2', type: 'method', label: 'Simulation', content: null, origin: 'system', pinned: false, syncKey: 'g:method:simulation', workspaceId: 'user-2', createdAt: new Date('2024-01-02') }
+    prismaMock.graphEntity.findMany.mockResolvedValue([mine, theirs])
+
+    const result = await dedupeGraph()
+
+    expect(result.groups).toBe(0)
+    expect(result.merged).toBe(0)
+    expect(prismaMock.graphEntity.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it('#54/V3.0.1: an explicit workspaceId scopes the initial query', async () => {
+    prismaMock.graphEntity.findMany.mockResolvedValue([])
+
+    await dedupeGraph('user-1')
+
+    expect(prismaMock.graphEntity.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { workspaceId: 'user-1' } })
+    )
   })
 
   it('normalizes a lone entity syncKey to the global scheme', async () => {
@@ -169,6 +229,7 @@ describe('dedupeGraph', () => {
       origin: 'system',
       pinned: false,
       syncKey: 'job-scoped-key',
+      workspaceId: 'default',
       createdAt: new Date(),
     }
     prismaMock.graphEntity.findMany.mockResolvedValue([lone])

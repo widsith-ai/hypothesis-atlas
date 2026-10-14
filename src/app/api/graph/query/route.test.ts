@@ -1,16 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-const { prismaMock, generateWithGroqMock } = vi.hoisted(() => ({
+const { prismaMock, generateWithGroqMock, getServerSessionMock } = vi.hoisted(() => ({
   prismaMock: {
     graphEntity: { findMany: vi.fn() },
     graphEdge: { findMany: vi.fn() },
     entitySource: { findMany: vi.fn() },
   },
   generateWithGroqMock: vi.fn(),
+  getServerSessionMock: vi.fn(),
 }))
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/groq', () => ({ generateWithGroq: generateWithGroqMock }))
+vi.mock('next-auth', () => ({ getServerSession: getServerSessionMock }))
+vi.mock('@/lib/auth', () => ({ authOptions: {} }))
 
 import { POST } from './route'
 
@@ -26,6 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
   prismaMock.entitySource.findMany.mockResolvedValue([])
+  getServerSessionMock.mockResolvedValue(null)
 })
 
 describe('POST /api/graph/query', () => {

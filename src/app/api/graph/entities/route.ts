@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { authOptions } from '@/lib/auth'
 import { isEntityType, isEdgeType } from '@/lib/research-graph'
+import { resolveWorkspaceId, canWriteGraphItem } from '@/lib/graphAccess'
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,6 +22,11 @@ export async function POST(request: NextRequest) {
     const trimmedContent =
       typeof content === 'string' && content.trim() ? content.trim().slice(0, 4000) : null
 
+    // #54/V3.0.1: a manually created entity belongs to its creator's workspace
+    // (the shared "default" one when anonymous), same as before accounts existed.
+    const session = await getServerSession(authOptions)
+    const workspaceId = resolveWorkspaceId(session?.user?.id)
+
     const entity = await prisma.graphEntity.create({
       data: {
         type,
@@ -26,12 +34,15 @@ export async function POST(request: NextRequest) {
         content: trimmedContent,
         jobId: typeof jobId === 'string' && jobId ? jobId : null,
         origin: 'user',
+        workspaceId,
       },
     })
 
     if (connectTo && isEdgeType(edgeType)) {
       const target = await prisma.graphEntity.findUnique({ where: { id: connectTo } })
-      if (target && target.id !== entity.id) {
+      // Connecting to another entity is still a write — confined to entities
+      // already in this workspace, even if a shared/public one was readable.
+      if (target && target.id !== entity.id && canWriteGraphItem(target.workspaceId, workspaceId)) {
         try {
           await prisma.graphEdge.create({
             data: {
@@ -39,6 +50,7 @@ export async function POST(request: NextRequest) {
               toId: target.id,
               type: edgeType,
               origin: 'user',
+              workspaceId,
             },
           })
         } catch (err) {
