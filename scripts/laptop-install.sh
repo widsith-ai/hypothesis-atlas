@@ -6,10 +6,13 @@ npm install
 
 if [ ! -f .env ]; then
   echo "[2/4] Creating .env from local defaults..."
-  cat > .env <<'EOF'
-DATABASE_URL="postgresql://postgres:postgres@localhost:5433/hypothesis_atlas?schema=public"
+  NEXTAUTH_SECRET="$(openssl rand -base64 32)"
+  cat > .env <<EOF
+DATABASE_URL="postgresql://postgres:postgres@localhost:5434/hypothesis_atlas?schema=public"
 REDIS_URL="redis://localhost:6379"
 GROQ_API_KEY="your_groq_api_key_here"
+NEXTAUTH_SECRET="${NEXTAUTH_SECRET}"
+NEXTAUTH_URL="http://localhost:3000"
 EOF
   echo "Created .env. Please replace GROQ_API_KEY with your real key."
 else

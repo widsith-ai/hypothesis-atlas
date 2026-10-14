@@ -1,8 +1,22 @@
 # Hypothesis Atlas
 
-HEPOPS Atlas (Hypothesis Atlas) is a multi-domain evidence mapping platform that automatically discovers, analyzes, and visualizes scientific and technical knowledge from multiple sources including peer-reviewed papers, datasets, and social signals.
+Hypothesis Atlas is a multi-domain evidence mapping platform that automatically discovers, analyzes, and visualizes scientific and technical knowledge from peer-reviewed papers, datasets, and social signals — then carries that research through planning and peer review without leaving the app.
 
-It now includes a full **Academic Paper Pipeline**, including **Atlas Plan** — an in-app planning tool that drafts a contribution statement, claims, an evidence map grounded in your sources, and an outline, directly from your research — letting you go from a research topic all the way to a structured paper draft without leaving the app.
+It includes a full **Academic Paper Pipeline** built around **Atlas Plan**, an in-app planning tool that drafts a contribution statement, claims, an evidence map grounded in your own sources, and an outline, directly from your research; a **Peer Review** committee of reviewer agents; a **persistent Research Graph** that accumulates across every run; and real **accounts**, so research and plans belong to the person who made them.
+
+## Contents
+
+- [Demo Video](#demo-video)
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [Acknowledgments and prior art](#acknowledgments-and-prior-art)
+- [Deployment](#deployment)
+- [Development](#development)
+- [Version History](#version-history)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
 
 ## Demo Video
 
@@ -41,15 +55,25 @@ It now includes a full **Academic Paper Pipeline**, including **Atlas Plan** —
 - Converge to Top 3 research ideas from your exploration
 - Export brainstorm as Markdown
 
+### Accounts & Ownership
+- **Real sign-in**: email/password accounts (bcrypt-hashed), not the placeholder it once was
+- **Self-hosted stays anonymous by default**: accounts are opt-in unless the deployment sets `REQUIRE_AUTH=true` (the hosted tier) — a self-hosted instance works fully without anyone signing in
+- **Ownership, not a wall**: a job or bold idea created while signed in is tied to that account; anonymous work stays fully open, exactly as before accounts existed
+- **Claim flow**: sign in later and claim research you made anonymously, so nothing is orphaned by signing up after the fact
+- **Account page** (`/account`): profile (name, avatar initials, member since, plan), billing & usage (real counts of your jobs and bold ideas — no hosted billing is live yet, and the page says so rather than showing a fake price), and settings (change name, change password)
+- **My Research** shows "Yours" / "Unclaimed" badges once you're signed in, so shared or anonymous entries are never mistaken for your own
+
 ### Paper Pipeline
-- **Idea selection** — picks from your converged ideas, knowledge tree nodes, or raw topic
-- **Find Papers** — dedicated tab to search OpenAlex + PubMed with editable query; relevance + recency ranked
-- **Paper Outline** — Groq-powered IMRaD outline generation
-- **Atlas Plan** — drafts a contribution statement, claims to support, an evidence map (each claim checked against your peer-reviewed sources), a method/data plan, threats to validity, and an outline, in one pass
-  - Session caching: resume the last plan per idea automatically
+Three steps: **Setup → Plan → Experiments**.
+
+- **Setup** — pick an idea (from your converged ideas, knowledge tree nodes, or the raw topic) and collect papers (search OpenAlex + PubMed, or import from the Paper Map) in one place; both feed directly into the plan
+- **Plan** — **Atlas Plan** drafts a contribution statement, claims to support, an evidence map, a method/data plan, threats to validity, and an outline, in one pass, grounded against the papers collected on Setup plus the job's own peer-reviewed sources
+  - Every section is editable in place — rewrite the contribution, add or edit a claim, adjust the outline — and your edits save automatically
+  - An edited claim is marked **"edited – not re-checked"** until you re-check it; re-checking re-grounds it against the same sources without regenerating the whole plan
+  - Each claim's grounding badge (grounded / unsupported / contradicted) expands to show the actual source passage it was checked against and which method decided it (overlap / NLI / LLM judge) — the same verification pipeline Peer Review uses
   - Reference Document: attach a `.md` draft or notes for the planner to read as context
-  - Claims carry a grounding badge (grounded / unsupported / contradicted), using the same verification pipeline as Peer Review
-- **Export context** — generate a structured, plain-Markdown context file that works with any editor or agent you use for writing
+  - **Export** — a structured, plain-Markdown context file (contribution, claims with their badges, method plan, threats, outline) that works with any editor or agent, not tied to one plugin
+- **Experiments** — design an experiment for the plan (hypothesis, variables, metrics, expected results) and verify quantitative claims
 
 ### Peer Review
 - Standalone **Peer Review session** at `/review` (nav button on Explore, next to Write Paper)
@@ -78,7 +102,18 @@ It now includes a full **Academic Paper Pipeline**, including **Atlas Plan** —
 
 ## Quick Start
 
-### One-command install
+There are two ways to run this locally — pick one.
+
+### Option A: Docker (two commands, no local Node setup)
+
+```bash
+make image   # build the app image
+make run     # start Postgres, Redis, the web app, and the worker
+```
+
+Needs a `.env` — copy `.env.example` to `.env` and fill it in first. Open http://localhost:3000. Stop with `make stop`.
+
+### Option B: local dev (hot reload while you edit)
 
 ```bash
 make laptop-install
@@ -93,23 +128,26 @@ make worker
 
 Open http://localhost:3000
 
-### Manual setup
+#### Manual setup, if you'd rather not use `make`
 
 1. Install dependencies: `npm install`
-2. Create `.env.local` with:
+2. Create `.env` with:
    ```env
-   DATABASE_URL="postgresql://postgres:postgres@localhost:5433/hypothesis_atlas?schema=public"
+   DATABASE_URL="postgresql://postgres:postgres@localhost:5434/hypothesis_atlas?schema=public"
    REDIS_URL="redis://localhost:6379"
    GROQ_API_KEY="your_groq_api_key_here"
    ANTHROPIC_API_KEY="sk-ant-..."        # required for Paper Compare Mode
    RESEND_API_KEY="re_..."               # required for weekly digest emails
    NEXT_PUBLIC_APP_URL="http://localhost:3000"  # used in email unsubscribe links
+   NEXTAUTH_SECRET="generate with: openssl rand -base64 32"  # required for real login/signup
+   NEXTAUTH_URL="http://localhost:3000"
+   # REQUIRE_AUTH="true"  # leave unset for self-hosted/anonymous use (the default)
    ```
 3. Start infrastructure: `make infra-up`
 4. Push schema: `make db-push`
 5. Start app and worker: `make dev` and `make worker`
 
-> `ANTHROPIC_API_KEY` is only required for Paper Compare Mode. `GROQ_API_KEY` powers Atlas Plan and the rest of the app's LLM features.
+> `ANTHROPIC_API_KEY` is only required for Paper Compare Mode. `GROQ_API_KEY` powers Atlas Plan and the rest of the app's LLM features. `NEXTAUTH_SECRET`/`NEXTAUTH_URL` are required for sign-in to work at all; `REQUIRE_AUTH` only matters if you want to *require* an account (the hosted tier) rather than make one optional (self-hosted default).
 
 ---
 
@@ -118,10 +156,11 @@ Open http://localhost:3000
 1. Visit `/explore`, choose a domain, and click a term in the word cloud
 2. Watch the real-time evidence gathering in the Knowledge Tree
 3. Open the **Notebook** tab → brainstorm → **Converge to Top 3** ideas
-4. Click **Write Paper** in the tab bar → select an idea → plan and draft with Atlas Plan
-5. Click **Peer Review** next to Write Paper → your current draft is loaded by default → a committee of reviewer agents grades it against your target venue
+4. Click **Write Paper** in the tab bar → **Setup**: pick an idea and collect papers → **Plan**: draft, edit, and re-check claims with Atlas Plan → **Experiments**: design and verify an experiment for it
+5. Click **Peer Review** next to Write Paper → your current plan is loaded by default → a committee of reviewer agents grades it against your target venue
 6. Optionally export your research context as Markdown and continue writing in any editor or agent
 7. Open **Research Graph** (`/graph`) any time → every run's knowledge accumulates into one persistent, duplicate-free graph (the same concept across runs converges onto one node) → ask "what have I learned about X across all my runs" → edit or extend the graph yourself
+8. Sign in (top-right corner) if you want your research tied to an account — optional on a self-hosted instance, required on the hosted tier
 
 ### Paper Pipeline flow
 
@@ -129,9 +168,9 @@ Open http://localhost:3000
 /explore  →  /job/[id]  →  /job/[id]/paper
               (Knowledge Tree, Notebook, Paper Map)
                                 ↓
-                        1. Select Idea
-                        2. Paper Outline  (optional — Groq)
-                        3. Write Paper    (Atlas Plan)
+                   1. Setup    (idea + papers)
+                   2. Plan     (Atlas Plan — draft, edit, re-check)
+                   3. Experiments
                                 ↓
                         Export context (Markdown)
 ```
@@ -159,14 +198,16 @@ If code is ever copied from an MIT/Apache project, its license notice will be li
 
 ## Deployment
 
-Production requires separate services:
+**Self-hosting on one machine**: `make image && make run` (see Quick Start) is a complete deployment by itself — Postgres, Redis, the app, and the worker, all in Docker. Set `NEXTAUTH_URL` to your actual domain; leave `REQUIRE_AUTH` unset to keep it open to anonymous use.
 
-- **Web app**: Deploy to Vercel with env vars set
+**Production with managed services** (what the hosted tier runs):
+
+- **Web app**: Deploy to Vercel with env vars set (including `NEXTAUTH_SECRET` and `NEXTAUTH_URL` — login returns a generic "server configuration" error without them)
 - **Worker**: Deploy to Railway/Render (runs `npm run worker`)
 - **Database**: Managed PostgreSQL (Neon/Supabase)
 - **Queue**: Managed Redis (Upstash)
 
-Push schema to production: `DATABASE_URL="prod_url" npm run db:push`
+Push schema to production: `DATABASE_URL="prod_url" npm run db:push` — this includes the `User`/`Account`/`Session` tables accounts need; forgetting it after a fresh deploy produces the same "server configuration" error as a missing `NEXTAUTH_SECRET`, from a different cause.
 
 ---
 
@@ -176,17 +217,43 @@ Push schema to production: `DATABASE_URL="prod_url" npm run db:push`
 # Database studio
 npm run db:studio
 
-# Reset database
-docker-compose down -v && docker-compose up -d && npm run db:push
+# Reset database — targets just postgres/redis; `docker-compose up -d` with no
+# service names also tries to start app/worker, which need `make image` first
+docker-compose down -v && docker-compose up -d postgres redis && npm run db:push
 ```
 
 ---
 
 ## Version History
 
+### V3.0.0.2 — Paper pipeline redesign around Atlas Plan
+
+Five steps became three: Select Idea and Find Papers merged into **Setup**; the separate Paper Outline step (an ungrounded, disconnected Groq prompt) was removed in favor of Atlas Plan's own outline mode. Papers collected on Setup now actually feed the plan instead of staying in `localStorage` unused. Atlas Plan's output is editable in place and re-groundable after an edit — a claim you rewrite is marked "edited – not re-checked" until you re-check it, rather than silently keeping a stale verdict — and each grounding badge expands to show the source passage it was checked against. Step bar and section headings moved onto the ink design system. See #64.
+
 ### V3.0.0.1 — Replaced the ARS integration with Atlas Plan
 
 Replaced the ARS integration with Atlas Plan; the review engine was already independent of ARS and is unchanged. Atlas Plan is an original, clean-room implementation — see "Acknowledgments and prior art." Preset peer-review personas are now labeled by role instead of invented names (e.g. "Methodology & Novelty Reviewer"). See #63.
+
+### V3.5 — Ink-Wash Redesign, One-Command Docker Run & Hosted Pricing Update
+
+- **Ink-wash visual redesign** across the landing page, Explorer, job pages, My Research, Bold Idea, and the account/pricing/docs pages: a shared palette (`lib/inkPalette.ts`), ink-styled components (`components/ink/`), brush-style accents — in English, not the Chinese seals/inscriptions an earlier pass used, which read as unfamiliar characters to readers who don't use them
+- **One-command Docker run**: `make image` builds the app, `make run` starts Postgres, Redis, the app, and the worker — a complete local deployment in two commands, with secrets injected at run time rather than baked into the image
+- **Hosted pricing corrected**: the hosted tier is $19/month (unlimited runs, billed monthly, cancel anytime), not the old $1-per-round pay-per-use model; the self-hosted license badge now says AGPL-3.0, matching `LICENSE`, instead of the stale MIT label
+- Landing page: a compact theme dropdown instead of three separate buttons, fixed to no longer overlap the account widget at any screen width
+
+### V3.4 — Account Profile, Billing & Usage, Settings
+
+- **Account page** (`/account`): three tabs — Profile (avatar initials, name, email, member-since date, plan, real usage counts), Billing & Usage (reads the stored plan field rather than hardcoding "Free"; says plainly that no hosted billing is live yet instead of showing a fake upgrade button), and Settings (edit display name, change password)
+- **Ownership display**: My Research marks each job and bold idea "Yours" or "Unclaimed" — computed server-side, so no other account's id is ever sent to the browser
+- Reachable from a dropdown behind the account name in the top-right corner, alongside Sign out
+
+### V3.3 — Real User Accounts
+
+- **Real sign-in**: email/password accounts with bcrypt-hashed passwords, replacing a sign-in form that previously just faked success after a timeout
+- **Self-hosted-vs-hosted flag** (`REQUIRE_AUTH`): unset by default so a self-hosted instance stays fully usable anonymously; the hosted tier sets it to require an account before starting new research
+- **Ownership, added without breaking anonymous use**: a job or bold idea created while signed in is tied to that account; an unowned one stays exactly as open as before accounts existed — nothing about anonymous usage changed
+- **Claim flow**: a signed-in user can attach a job or bold idea they made anonymously to their account after the fact, so signing up later doesn't orphan earlier work
+- Ownership checks cover the core job/bold-idea routes and their list endpoints; the nested sub-resource routes (notes, notebook, chat, etc.) do not yet check ownership — tracked separately, not yet closed
 
 ### V3.2 — License Switch: MIT → AGPL-3.0 (dual licensing)
 
