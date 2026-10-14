@@ -14,7 +14,7 @@ For organizations that cannot satisfy AGPL-3.0's source-disclosure obligations �
 
 ## Contact
 
-**Luxin Zhang** — 67583508+LuxinZhang902@users.noreply.github.com
+**Luxin Zhang** — hello@hypothesisatlas.com
 
 ## Historical note
 
