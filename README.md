@@ -412,4 +412,8 @@ See `SECURITY.md` for responsible disclosure.
 
 Dual-licensed — your choice of **GNU AGPL-3.0** (copyleft; see `LICENSE`) or a **commercial license** for use without copyleft obligations (see `COMMERCIAL-LICENSE.md`). All releases before the `v3.2.0` tag remain MIT-licensed forever. Contributions require DCO sign-off — see `CONTRIBUTING.md`.
 
+### Enterprise (`ee/`)
+
+Enterprise features (SSO, role-based access, audit logs, data retention) live in [`ee/`](ee/) and are source-available under the [Widsith Enterprise License](ee/LICENSE.md) (draft — pending legal review): you can read and audit the code, but production use requires a paid subscription and license key. The core outside `ee/` stays AGPL-3.0 forever; enterprise features are additive — core functionality will never move behind pay.
+
 V2 of this app (before the `V3.0.0.1` tag) integrated the [Academic Research Skills](https://github.com/Imbad0202/academic-research-skills) plugin, originally created by **Cheng-I Wu** and licensed under **CC-BY-NC 4.0**. That integration was removed in V3.0.0.1 and replaced with Atlas Plan, an original implementation — see "Acknowledgments and prior art" above. Releases tagged before `V3.0.0.1` keep their ARS attribution and remain subject to CC-BY-NC 4.0 for that integrated code.
