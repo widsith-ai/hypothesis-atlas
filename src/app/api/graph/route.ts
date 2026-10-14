@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { authOptions } from '@/lib/auth'
 import { syncJobGraph } from '@/lib/research-graph'
+import { resolveWorkspaceId, graphVisibilityWhere } from '@/lib/graphAccess'
 
 // Source rows are per-job (papers get re-fetched per run), so the same paper
 // can be linked several times via different rows — collapse them by title.
@@ -16,14 +19,21 @@ function dedupeSources<T extends { source: { title: string } }>(links: T[]): T[]
 
 export async function GET() {
   try {
-    // Backfill any completed job whose knowledge tree hasn't reached the graph yet
-    // (a pre-existing 'note' entity used to make this look already-synced and skip
-    // every job forever — checking entityCount === 0 isn't a valid "synced" signal).
+    const session = await getServerSession(authOptions)
+    const viewerId = session?.user?.id
+    const viewerWorkspaceId = resolveWorkspaceId(viewerId)
+    const viewerAuthenticated = !!viewerId
+
+    // Backfill any of the viewer's own completed jobs whose knowledge tree hasn't
+    // reached the graph yet (#54/V3.0.1: scoped to the viewer's own jobs — a
+    // request from one account shouldn't trigger writes into another's workspace).
+    // A pre-existing 'note' entity used to make this look already-synced and skip
+    // every job forever — checking entityCount === 0 isn't a valid "synced" signal.
     // Sync completion is tracked via the 'research_graph' progress event syncJobGraph
     // emits per job, rather than entity ownership — topic entities converge across
     // jobs that share a label, so a later job's id may never own one.
     const completedJobs = await prisma.job.findMany({
-      where: { status: 'completed' },
+      where: { status: 'completed', userId: viewerId ?? null },
       select: { id: true },
     })
     if (completedJobs.length > 0) {
@@ -41,7 +51,12 @@ export async function GET() {
       }
     }
 
+    // #54/V3.0.1: every /api/graph route now actually checks who's asking —
+    // previously none did. Unowned (workspace "default") data stays exactly
+    // as open as before accounts existed; only entities/edges that belong to
+    // someone else's workspace, and aren't shared/public, are now excluded.
     const entities = await prisma.graphEntity.findMany({
+      where: graphVisibilityWhere(viewerWorkspaceId, viewerAuthenticated),
       include: {
         entitySources: {
           include: {
@@ -54,7 +69,12 @@ export async function GET() {
       orderBy: { createdAt: 'asc' },
     })
 
-    const edges = await prisma.graphEdge.findMany({ orderBy: { createdAt: 'asc' } })
+    // An edge is visible exactly when both its endpoints are — see lib/graphAccess.ts.
+    const visibleEntityIds = entities.map((e) => e.id)
+    const edges = await prisma.graphEdge.findMany({
+      where: { fromId: { in: visibleEntityIds }, toId: { in: visibleEntityIds } },
+      orderBy: { createdAt: 'asc' },
+    })
 
     const byType: Record<string, number> = {}
     for (const e of entities) {

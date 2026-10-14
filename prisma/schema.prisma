@@ -216,7 +216,20 @@ model GraphEntity {
   content      String?  @db.Text
   jobId        String?  // provenance: run that produced it (survives job deletion)
   origin       String   @default("system") // 'system' (synced from a run) | 'user' (manually created)
-  syncKey      String?  @unique // deterministic key for idempotent run-sync upserts
+  syncKey      String?  // deterministic key for idempotent run-sync upserts — unique per workspace, not globally (see @@unique below)
+  // #54/V3.0.1: isolates the graph per tenant. One workspace per signed-in
+  // user (workspaceId = their user id); anonymous/self-hosted callers share
+  // a single "default" workspace (see lib/graphAccess.ts) — same single-
+  // tenant semantics as before accounts existed, since anonymous callers
+  // can't be told apart anyway. A full Workspace model with membership is a
+  // bigger feature this issue doesn't build.
+  workspaceId  String   @default("default")
+  // 'private' (default, only this workspace) | 'shared' (any signed-in
+  // viewer) | 'public' (anyone, including anonymous). Write access (create/
+  // edit/delete) is always confined to the entity's own workspace regardless
+  // of visibility — only read reach widens. Nothing sets this away from the
+  // default yet; that's a sharing feature, not this issue's scope.
+  visibility   String   @default("private")
   metadataJson String?  @db.Text // e.g. {"noteType":"manual"} for notes
   pinned       Boolean  @default(false)
   createdAt    DateTime @default(now())
@@ -226,9 +239,11 @@ model GraphEntity {
   edgesTo       GraphEdge[]    @relation("GraphEdgeTo")
   entitySources EntitySource[]
 
+  @@unique([workspaceId, syncKey])
   @@index([type])
   @@index([jobId])
   @@index([origin])
+  @@index([workspaceId])
 }
 
 model GraphEdge {
@@ -238,6 +253,12 @@ model GraphEdge {
   type      String   // 'motivates' | 'provides' | 'uses_method' | 'contradicts' | 'reveals' | 'related_to' | 'notes_on'
   jobId     String?
   origin    String   @default("system")
+  // #54/V3.0.1: no separate visibility field on edges — an edge is visible
+  // exactly when both its endpoint entities are (see lib/graphAccess.ts).
+  // workspaceId is still stamped (matches this issue's explicit ask, and
+  // speeds up own-workspace write/delete checks) even though it's derivable
+  // from the endpoints.
+  workspaceId String  @default("default")
   createdAt DateTime @default(now())
 
   from      GraphEntity @relation("GraphEdgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
@@ -247,6 +268,7 @@ model GraphEdge {
   @@index([fromId])
   @@index([toId])
   @@index([type])
+  @@index([workspaceId])
 }
 
 model EntitySource {

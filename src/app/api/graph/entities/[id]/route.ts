@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { authOptions } from '@/lib/auth'
 import { isEntityType } from '@/lib/research-graph'
+import { resolveWorkspaceId, canWriteGraphItem } from '@/lib/graphAccess'
 
 export async function PATCH(
   request: NextRequest,
@@ -13,6 +16,14 @@ export async function PATCH(
     const existing = await prisma.graphEntity.findUnique({ where: { id: params.id } })
     if (!existing) {
       return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
+    }
+
+    // #54/V3.0.1: editing is a write — confined to the entity's own workspace
+    // regardless of how visible it is to this viewer (shared/public is read-only).
+    const session = await getServerSession(authOptions)
+    const workspaceId = resolveWorkspaceId(session?.user?.id)
+    if (!canWriteGraphItem(existing.workspaceId, workspaceId)) {
+      return NextResponse.json({ error: 'Not authorized to edit this entity' }, { status: 403 })
     }
 
     const data: Record<string, unknown> = {}
@@ -67,6 +78,12 @@ export async function DELETE(
     const existing = await prisma.graphEntity.findUnique({ where: { id: params.id } })
     if (!existing) {
       return NextResponse.json({ error: 'Entity not found' }, { status: 404 })
+    }
+
+    const session = await getServerSession(authOptions)
+    const workspaceId = resolveWorkspaceId(session?.user?.id)
+    if (!canWriteGraphItem(existing.workspaceId, workspaceId)) {
+      return NextResponse.json({ error: 'Not authorized to delete this entity' }, { status: 403 })
     }
 
     await prisma.graphEntity.delete({ where: { id: params.id } })

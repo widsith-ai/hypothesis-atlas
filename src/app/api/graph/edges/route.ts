@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
+import { authOptions } from '@/lib/auth'
 import { isEdgeType } from '@/lib/research-graph'
+import { resolveWorkspaceId, canWriteGraphItem } from '@/lib/graphAccess'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,6 +28,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'One or both entities not found' }, { status: 404 })
     }
 
+    // #54/V3.0.1: creating an edge is a write on both endpoints — each must
+    // already be in this workspace, even if one was readable as shared/public.
+    const session = await getServerSession(authOptions)
+    const workspaceId = resolveWorkspaceId(session?.user?.id)
+    if (!canWriteGraphItem(from.workspaceId, workspaceId) || !canWriteGraphItem(to.workspaceId, workspaceId)) {
+      return NextResponse.json({ error: 'Not authorized to connect these entities' }, { status: 403 })
+    }
+
     try {
       const edge = await prisma.graphEdge.create({
         data: {
@@ -33,6 +44,7 @@ export async function POST(request: NextRequest) {
           type,
           jobId: typeof jobId === 'string' && jobId ? jobId : null,
           origin: 'user',
+          workspaceId,
         },
       })
       return NextResponse.json({ edge }, { status: 201 })

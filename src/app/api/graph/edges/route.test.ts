@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-const { prismaMock } = vi.hoisted(() => ({
+const { prismaMock, getServerSessionMock } = vi.hoisted(() => ({
   prismaMock: {
     graphEntity: { findUnique: vi.fn() },
     graphEdge: { create: vi.fn() },
   },
+  getServerSessionMock: vi.fn(),
 }))
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+vi.mock('next-auth', () => ({ getServerSession: getServerSessionMock }))
+vi.mock('@/lib/auth', () => ({ authOptions: {} }))
 
 import { POST } from './route'
 
@@ -22,11 +25,14 @@ function postRequest(body: unknown) {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  getServerSessionMock.mockResolvedValue(null)
 })
 
 describe('POST /api/graph/edges', () => {
-  it('creates an edge between two existing entities', async () => {
-    prismaMock.graphEntity.findUnique.mockResolvedValueOnce({ id: 'from-1' }).mockResolvedValueOnce({ id: 'to-1' })
+  it('creates an edge between two existing entities in the same (default) workspace', async () => {
+    prismaMock.graphEntity.findUnique
+      .mockResolvedValueOnce({ id: 'from-1', workspaceId: 'default' })
+      .mockResolvedValueOnce({ id: 'to-1', workspaceId: 'default' })
     prismaMock.graphEdge.create.mockResolvedValue({ id: 'edge-1', fromId: 'from-1', toId: 'to-1', type: 'motivates' })
 
     const res = await POST(postRequest({ fromId: 'from-1', toId: 'to-1', type: 'motivates' }))
@@ -34,6 +40,9 @@ describe('POST /api/graph/edges', () => {
 
     expect(res.status).toBe(201)
     expect(body.edge.id).toBe('edge-1')
+    expect(prismaMock.graphEdge.create).toHaveBeenCalledWith({
+      data: { fromId: 'from-1', toId: 'to-1', type: 'motivates', jobId: null, origin: 'user', workspaceId: 'default' },
+    })
   })
 
   it('rejects an invalid edge type', async () => {
@@ -47,20 +56,33 @@ describe('POST /api/graph/edges', () => {
   })
 
   it('returns 404 when an endpoint entity is missing', async () => {
-    prismaMock.graphEntity.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'to-1' })
+    prismaMock.graphEntity.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'to-1', workspaceId: 'default' })
     const res = await POST(postRequest({ fromId: 'from-1', toId: 'to-1', type: 'motivates' }))
     expect(res.status).toBe(404)
   })
 
+  it('refuses to connect an entity that belongs to a different workspace', async () => {
+    prismaMock.graphEntity.findUnique
+      .mockResolvedValueOnce({ id: 'from-1', workspaceId: 'default' })
+      .mockResolvedValueOnce({ id: 'to-1', workspaceId: 'someone-else' })
+    const res = await POST(postRequest({ fromId: 'from-1', toId: 'to-1', type: 'motivates' }))
+    expect(res.status).toBe(403)
+    expect(prismaMock.graphEdge.create).not.toHaveBeenCalled()
+  })
+
   it('returns 409 when the edge already exists', async () => {
-    prismaMock.graphEntity.findUnique.mockResolvedValueOnce({ id: 'from-1' }).mockResolvedValueOnce({ id: 'to-1' })
+    prismaMock.graphEntity.findUnique
+      .mockResolvedValueOnce({ id: 'from-1', workspaceId: 'default' })
+      .mockResolvedValueOnce({ id: 'to-1', workspaceId: 'default' })
     prismaMock.graphEdge.create.mockRejectedValue({ code: 'P2002' })
     const res = await POST(postRequest({ fromId: 'from-1', toId: 'to-1', type: 'motivates' }))
     expect(res.status).toBe(409)
   })
 
   it('returns 500 for unexpected errors', async () => {
-    prismaMock.graphEntity.findUnique.mockResolvedValueOnce({ id: 'from-1' }).mockResolvedValueOnce({ id: 'to-1' })
+    prismaMock.graphEntity.findUnique
+      .mockResolvedValueOnce({ id: 'from-1', workspaceId: 'default' })
+      .mockResolvedValueOnce({ id: 'to-1', workspaceId: 'default' })
     prismaMock.graphEdge.create.mockRejectedValue(new Error('db down'))
     const res = await POST(postRequest({ fromId: 'from-1', toId: 'to-1', type: 'motivates' }))
     expect(res.status).toBe(500)
