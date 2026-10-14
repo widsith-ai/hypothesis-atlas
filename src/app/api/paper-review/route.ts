@@ -45,36 +45,39 @@ interface AgentReview {
   recommendation?: string
 }
 
+// #63 (V3.0.0.1): role names, not invented people — a made-up name with a
+// title ("Prof. Elena Marsh") can read as a real expert's verdict. These are
+// labeled review lenses, not personas standing in for actual reviewers.
 const PRESET_AGENTS = [
   {
     id: 'methodologist',
-    name: 'Prof. Elena Marsh — Methodology & Novelty',
+    name: 'Methodology & Novelty Reviewer',
     persona:
-      'A tenured professor who has served on top-tier program committees for 15 years. She is skeptical of incremental work and scrutinizes whether the claimed contribution is genuinely novel versus repackaged prior art. She reads the method description line by line and flags logical gaps, missing baselines, and unsupported assumptions.',
+      'Reviews with 15 years of top-tier program-committee experience. Skeptical of incremental work; scrutinizes whether the claimed contribution is genuinely novel versus repackaged prior art. Reads the method description line by line and flags logical gaps, missing baselines, and unsupported assumptions.',
   },
   {
     id: 'committee',
-    name: 'Dr. Rajiv Menon — Venue Committee, Impact & Fit',
+    name: 'Venue Fit & Impact Reviewer',
     persona:
-      'A senior program committee member and journal associate editor. He evaluates whether the paper matters to this venue\'s specific audience, whether the positioning and related-work coverage are fair, and whether the claims match the evidence. He writes balanced reviews but is decisive about rejections that waste reviewer time.',
+      'Reviews as a program committee member and journal associate editor would. Evaluates whether the paper matters to this venue\'s specific audience, whether the positioning and related-work coverage are fair, and whether the claims match the evidence. Writes balanced reviews but is decisive about rejections that waste reviewer time.',
   },
   {
     id: 'rigor',
-    name: 'Dr. Sofia Lindqvist — Statistical Rigor & Reproducibility',
+    name: 'Statistical Rigor & Reproducibility Reviewer',
     persona:
-      'A methods reviewer with a background in experimental design. She checks statistical validity, sample sizes, error bars, ablation coverage, dataset choices, and whether the experiments could be reproduced from the paper alone. She is unforgiving about overclaimed results and missing negative results.',
+      'Reviews with a background in experimental design. Checks statistical validity, sample sizes, error bars, ablation coverage, dataset choices, and whether the experiments could be reproduced from the paper alone. Unforgiving about overclaimed results and missing negative results.',
   },
   {
     id: 'literature',
-    name: 'Dr. Miriam Chen — Related Work & Claims',
+    name: 'Related Work & Claims Reviewer',
     persona:
-      'A meticulous scholar who checks whether the paper positions its contribution honestly, distinguishes evidence from speculation, and makes claims at the right level of scope. She calls out missing comparisons and citations that do not support the surrounding argument.',
+      'Reviews meticulously for honesty: checks whether the paper positions its contribution honestly, distinguishes evidence from speculation, and makes claims at the right level of scope. Calls out missing comparisons and citations that do not support the surrounding argument.',
   },
   {
     id: 'clarity',
-    name: 'Prof. Theo Alvarez — Clarity & Reproducibility',
+    name: 'Clarity & Reproducibility Reviewer',
     persona:
-      'A senior reviewer focused on whether another research group could understand, reproduce, and build on the work. He traces definitions, datasets, implementation details, and stated limitations, and turns ambiguities into concrete questions for the authors.',
+      'Reviews for whether another research group could understand, reproduce, and build on the work. Traces definitions, datasets, implementation details, and stated limitations, and turns ambiguities into concrete questions for the authors.',
   },
 ]
 

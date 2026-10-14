@@ -3,15 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import ARSPlanChat from "@/components/ARSPlanChat";
+import AtlasPlan from "@/components/AtlasPlan";
 import AssistantChat from "@/components/AssistantChat";
 import ExperimentsPanel from "@/components/ExperimentsPanel";
 import NotesPanel from "@/components/NotesPanel";
 import PaperMapPicker from "@/components/PaperMapPicker";
 import PaperQuizPanel from "@/components/PaperQuizPanel";
 import { REL_COLOR, REL_FALLBACK, TIER_COLOR } from "@/components/PaperMap";
-
-type Step = "context" | "outline" | "papers" | "ars" | "experiments";
+import InkSeal from "@/components/ink/InkSeal";
+import { resolveStep, STEPS, type Step } from "./steps";
 
 interface ResearchIdea {
   title: string;
@@ -21,23 +21,6 @@ interface ResearchIdea {
   field_context: string[];
 }
 
-interface OutlineSubsection {
-  heading: string;
-  keyPoints: string[];
-}
-
-interface OutlineSection {
-  name: string;
-  subsections: OutlineSubsection[];
-}
-
-interface Outline {
-  title: string;
-  abstract: string;
-  sections: OutlineSection[];
-  keyReferences: string[];
-}
-
 import { Suspense } from "react";
 
 function PaperPipelineInner() {
@@ -45,20 +28,17 @@ function PaperPipelineInner() {
   const searchParams = useSearchParams();
   const jobId = params.id as string;
 
-  const VALID_STEPS: Step[] = ["context", "papers", "outline", "ars", "experiments"];
-  const urlStep = searchParams.get("step") as Step | null;
-  // Server and first client render must match — always start from the URL (or "context").
+  const urlStep = resolveStep(searchParams.get("step"));
+  // Server and first client render must match — always start from the URL (or "setup").
   // The cached step is applied after mount in the effect below to avoid SSR hydration mismatch.
-  const [step, setStep] = useState<Step>(
-    urlStep && VALID_STEPS.includes(urlStep) ? urlStep : "context"
-  );
+  const [step, setStep] = useState<Step>(urlStep ?? "setup");
 
   // Restore last visited step from cache after mount (avoids SSR hydration mismatch)
   useEffect(() => {
     if (urlStep) return;
     try {
-      const s = localStorage.getItem(`paper-step:${jobId}`);
-      if (s && VALID_STEPS.includes(s as Step)) setStep(s as Step);
+      const s = resolveStep(localStorage.getItem(`paper-step:${jobId}`));
+      if (s) setStep(s);
     } catch {}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
@@ -72,8 +52,7 @@ function PaperPipelineInner() {
   const [ideas, setIdeas] = useState<ResearchIdea[]>([]);
   const [ideasSource, setIdeasSource] = useState<"loading" | "converged" | "tree" | "topic">("loading");
   const [selectedIdeaIndex, setSelectedIdeaIndex] = useState(0);
-  const [arsContext, setArsContext] = useState("");
-  const [outline, setOutline] = useState<Outline | null>(null);
+  const [exportContext, setExportContext] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [referenceDoc, setReferenceDoc] = useState<{ name: string; content: string } | null>(null);
@@ -105,9 +84,9 @@ function PaperPipelineInner() {
   const [mapNodes, setMapNodes] = useState<MapNode[]>([]);
   const [mapLinks, setMapLinks] = useState<MapLink[]>([]);
 
-  // Load paper map data (nodes + typed relationships) while on the papers step
+  // Load paper map data (nodes + typed relationships) while on the setup step
   useEffect(() => {
-    if (step !== "papers") return;
+    if (step !== "setup") return;
     fetch(`/api/jobs/${jobId}/paper-map`)
       .then((r) => r.json())
       .then((d) => {
@@ -142,12 +121,7 @@ function PaperPipelineInner() {
   useEffect(() => {
     try {
       const cachedContext = localStorage.getItem(`paper-context:${jobId}`);
-      if (cachedContext) setArsContext(cachedContext);
-      const cachedOutline = localStorage.getItem(`paper-outline:${jobId}`);
-      if (cachedOutline) {
-        const parsed = JSON.parse(cachedOutline);
-        if (Array.isArray(parsed?.sections) && parsed.sections.length > 0) setOutline(parsed);
-      }
+      if (cachedContext) setExportContext(cachedContext);
       const cachedIndex = localStorage.getItem(`paper-selected-idea:${jobId}`);
       if (cachedIndex !== null) setSelectedIdeaIndex(Number(cachedIndex));
       const cachedPapers = localStorage.getItem(`paper-results:${jobId}`);
@@ -313,32 +287,8 @@ function PaperPipelineInner() {
         body: JSON.stringify({ stage: "context" }),
       });
       const data = await res.json();
-      setArsContext(data.arsContext ?? "");
-      try { if (data.arsContext) localStorage.setItem(`paper-context:${jobId}`, data.arsContext); } catch {}
-      setStep("context");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const generateOutline = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/jobs/${jobId}/paper-pipeline`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage: "outline" }),
-      });
-      const data = await res.json();
-      setOutline(data.outline ?? null);
-      try {
-        if (data.outline && Array.isArray(data.outline.sections) && data.outline.sections.length > 0) {
-          localStorage.setItem(`paper-outline:${jobId}`, JSON.stringify(data.outline));
-        }
-      } catch {}
-      setStep("outline");
+      setExportContext(data.exportContext ?? "");
+      try { if (data.exportContext) localStorage.setItem(`paper-context:${jobId}`, data.exportContext); } catch {}
     } catch (e) {
       console.error(e);
     } finally {
@@ -415,29 +365,32 @@ function PaperPipelineInner() {
       <div className="max-w-6xl mx-auto px-6 py-8">
         {/* Step tabs + Quiz button */}
         <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 w-fit">
-            {(["context", "papers", "outline", "ars", "experiments"] as Step[]).map((s, i) => (
-              <button
-                key={s}
-                onClick={() => setStep(s)}
-                className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-                  step === s
-                    ? "bg-white text-indigo-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                <span className="mr-2 text-xs opacity-60">{i + 1}.</span>
-                {s === "context" ? "Select Idea" : s === "papers" ? "Find Papers" : s === "outline" ? "Paper Outline" : s === "ars" ? "Write Paper" : "Experiments"}
-              </button>
+          <nav className="flex items-center gap-2" aria-label="Paper pipeline steps">
+            {STEPS.map((s, i) => (
+              <div key={s.id} className="flex items-center gap-2">
+                {i > 0 && <div className="ink-divider w-10" aria-hidden />}
+                <button
+                  onClick={() => setStep(s.id)}
+                  aria-current={step === s.id ? "step" : undefined}
+                  className={`flex items-center gap-2 px-2 py-1 transition-opacity ${
+                    step === s.id ? "opacity-100" : "opacity-55 hover:opacity-90"
+                  }`}
+                >
+                  <InkSeal text={String(i + 1)} size={30} className={step === s.id ? "" : "grayscale"} />
+                  <span className={`font-display text-lg ${step === s.id ? "text-gray-900 font-semibold" : "text-gray-600"}`}>
+                    {s.label}
+                  </span>
+                </button>
+              </div>
             ))}
-          </div>
+          </nav>
           <PaperQuizPanel jobId={jobId} idea={idea ?? null} inline />
         </div>
 
-        {/* ─── Step 1: Research Context ─── */}
-        {step === "context" && (
-          <div className="grid grid-cols-3 gap-6">
-            <div className="col-span-2 space-y-5">
+        {/* ─── Step 1: Setup — pick the idea and collect papers ─── */}
+        {step === "setup" && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-5">
               <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-gray-900 mb-1">Select Your Paper Topic</h2>
                 <p className="text-sm text-gray-500 mb-3">
@@ -545,359 +498,221 @@ function PaperPipelineInner() {
                   </div>
                 </div>
               )}
+
+              {/* Collect papers — merged into Setup in #64, and passed to Atlas Plan as sources */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+              {/* Header */}
+              <div className="mb-6 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 mb-1">Collect Papers</h2>
+                  <p className="text-sm text-gray-500">
+                    Search OpenAlex and PubMed, or import from your Paper Map. Atlas Plan cites and checks claims against every paper collected here.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setPickerOpen(true)}
+                  className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 border-violet-200 text-violet-700 hover:bg-violet-50 transition-colors"
+                  title="Pick papers from your paper map — they keep their map relationships"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  Import from Paper Map
+                </button>
+              </div>
+
+              {/* Search box */}
+              <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm mb-6">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Search description
+                </label>
+                <textarea
+                  value={paperSearchDesc}
+                  onChange={(e) => setPaperSearchDesc(e.target.value)}
+                  rows={3}
+                  placeholder="e.g. Recent advances in CRISPR gene editing for therapeutic applications in human disease"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm resize-none outline-none focus:ring-2 focus:ring-sky-300 text-gray-800 placeholder-gray-400 leading-relaxed"
+                />
+                <div className="flex items-center justify-between mt-3">
+                  <p className="text-xs text-gray-400">Edit to 1–3 sentences for best results</p>
+                  <button
+                    onClick={handleFetchPapers}
+                    disabled={loadingPapers || !paperSearchDesc.trim()}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 transition-all"
+                    style={{ background: "linear-gradient(to right, #4c777c, #587380)" }}
+                  >
+                    {loadingPapers ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                        Searching…
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        Explore Papers
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Results */}
+              {paperSearchDone && paperResults.length === 0 && (
+                <div className="text-center py-12 text-gray-400">
+                  <svg className="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm font-medium">No papers found</p>
+                  <p className="text-xs mt-1">Try rephrasing your description with different keywords</p>
+                </div>
+              )}
+
+              {paperResults.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      {paperResults.length} papers collected
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" /> OpenAlex
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> PubMed
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" /> Paper Map
+                      </span>
+                    </div>
+                  </div>
+                  {paperResults.map((paper) => (
+                    <div key={paper.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:border-indigo-300 hover:shadow-sm transition-all">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 mt-0.5">
+                          <span className={`inline-block w-2.5 h-2.5 rounded-full ${
+                            paper.source === "openalex" ? "bg-blue-400" : paper.source === "pubmed" ? "bg-emerald-400" : "bg-violet-500"
+                          }`} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <a
+                            href={paper.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-semibold text-gray-900 hover:text-indigo-700 transition-colors leading-snug"
+                          >
+                            {paper.title}
+                          </a>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                            {paper.year && (
+                              <span className="text-xs font-medium text-gray-500">{paper.year}</span>
+                            )}
+                            {paper.mapTier && (TIER_COLOR[paper.mapTier] ?? { label: null }).label && (
+                              <span
+                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                                style={{
+                                  background: (TIER_COLOR[paper.mapTier]?.fill ?? "#76626b") + "22",
+                                  color: TIER_COLOR[paper.mapTier]?.fill ?? "#76626b",
+                                }}
+                              >
+                                {(TIER_COLOR[paper.mapTier] ?? { label: paper.mapTier }).label}
+                              </span>
+                            )}
+                            {paper.venue && (
+                              <span className="text-xs text-gray-400 italic truncate max-w-xs">{paper.venue}</span>
+                            )}
+                            {paper.authors.length > 0 && (
+                              <span className="text-xs text-gray-400">
+                                {paper.authors.slice(0, 3).join(", ")}{paper.authors.length > 3 ? " et al." : ""}
+                              </span>
+                            )}
+                          </div>
+                          {paper.abstract && (
+                            <p className="text-xs text-gray-600 mt-2 leading-relaxed line-clamp-3">
+                              {paper.abstract}
+                            </p>
+                          )}
+                          {relationshipsFor(paper).length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {relationshipsFor(paper).map((rel, i) => {
+                                const style = REL_COLOR[rel.type] ?? REL_FALLBACK;
+                                return (
+                                  <span
+                                    key={i}
+                                    className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                                    style={{ background: style.color + "1f", color: style.color }}
+                                    title={rel.other.title}
+                                  >
+                                    {style.label} · {rel.other.title.slice(0, 30)}{rel.other.title.length > 30 ? "…" : ""}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        <a
+                          href={paper.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-shrink-0 p-1.5 rounded-lg hover:bg-indigo-50 text-gray-300 hover:text-indigo-500 transition-colors"
+                          title="Open paper"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              </div>
             </div>
 
             {/* Right column: actions */}
             <div className="space-y-4">
-              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-                <h3 className="font-semibold text-gray-900 mb-2">Next Steps</h3>
+              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm lg:sticky lg:top-6">
+                <h3 className="font-semibold text-gray-900 mb-2">Next</h3>
                 {idea && (
                   <div className="mb-3 px-3 py-2 bg-indigo-50 rounded-lg border border-indigo-100">
                     <p className="text-xs text-indigo-500 font-medium">Selected idea</p>
                     <p className="text-xs text-indigo-800 font-semibold mt-0.5 leading-tight">{idea.title}</p>
                   </div>
                 )}
-                <div className="space-y-3">
-                  <button
-                    onClick={generateOutline}
-                    disabled={loading || ideasSource === "loading" || ideas.length === 0}
-                    className="w-full py-3 px-4 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                        Generate Paper Outline
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setStep("ars")}
-                    disabled={ideasSource === "loading" || ideas.length === 0}
-                    className="w-full py-3 px-4 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-                    style={{ background: "linear-gradient(to right, #5f4e56, #5f4e56)" }}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Write Paper with This Idea
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-purple-50 rounded-2xl border border-purple-200 p-5">
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="font-semibold text-purple-900 text-sm">ARS Pipeline</h3>
-                </div>
-                <p className="text-xs text-purple-700 leading-relaxed">
-                  12-agent Claude pipeline: plan → outline → draft → peer review → revise.
+                <p className="mb-3 text-xs text-gray-500">
+                  {paperResults.length > 0
+                    ? `${paperResults.length} paper${paperResults.length === 1 ? "" : "s"} collected — Atlas Plan will use them alongside this job's peer-reviewed sources.`
+                    : "No papers collected yet. Atlas Plan will use this job's peer-reviewed sources."}
                 </p>
-                <ul className="mt-2 mb-3 space-y-1 text-xs text-purple-600">
-                  {["Socratic chapter-by-chapter planning", "Auto peer-review simulation", "Citation verification", "LaTeX / APA 7.0 output"].map((f) => (
-                    <li key={f} className="flex gap-1.5">
-                      <span>✓</span> {f}
-                    </li>
-                  ))}
-                </ul>
                 <button
-                  onClick={() => setStep("ars")}
+                  onClick={() => setStep("plan")}
                   disabled={ideasSource === "loading" || ideas.length === 0}
-                  className="w-full py-2 text-white rounded-lg text-xs font-semibold disabled:opacity-50 transition-all"
-                  style={{ background: "#5f4e56" }}
+                  className="w-full py-3 px-4 bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                 >
-                  Write Paper with This Idea →
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Plan with this idea
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ─── Step 2: Find Papers ─── */}
-        {step === "papers" && (
-          <div className="max-w-3xl mx-auto">
-            {/* Header */}
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-1">Find Latest Papers</h2>
-                <p className="text-sm text-gray-500">
-                  Describe what you want to find — we'll search OpenAlex and PubMed and return recent related papers.
-                </p>
-              </div>
-              <button
-                onClick={() => setPickerOpen(true)}
-                className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-2 border-violet-200 text-violet-700 hover:bg-violet-50 transition-colors"
-                title="Pick papers from your paper map — they keep their map relationships"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                </svg>
-                Import from Paper Map
-              </button>
-            </div>
-
-            {/* Search box */}
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm mb-6">
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                Search description
-              </label>
-              <textarea
-                value={paperSearchDesc}
-                onChange={(e) => setPaperSearchDesc(e.target.value)}
-                rows={3}
-                placeholder="e.g. Recent advances in CRISPR gene editing for therapeutic applications in human disease"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm resize-none outline-none focus:ring-2 focus:ring-sky-300 text-gray-800 placeholder-gray-400 leading-relaxed"
-              />
-              <div className="flex items-center justify-between mt-3">
-                <p className="text-xs text-gray-400">Edit to 1–3 sentences for best results</p>
-                <button
-                  onClick={handleFetchPapers}
-                  disabled={loadingPapers || !paperSearchDesc.trim()}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 transition-all"
-                  style={{ background: "linear-gradient(to right, #4c777c, #587380)" }}
-                >
-                  {loadingPapers ? (
-                    <>
-                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                      Searching…
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                      Explore Papers
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* Results */}
-            {paperSearchDone && paperResults.length === 0 && (
-              <div className="text-center py-12 text-gray-400">
-                <svg className="w-10 h-10 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-sm font-medium">No papers found</p>
-                <p className="text-xs mt-1">Try rephrasing your description with different keywords</p>
-              </div>
-            )}
-
-            {paperResults.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                    {paperResults.length} papers found
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" /> OpenAlex
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> PubMed
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-violet-500 inline-block" /> Paper Map
-                    </span>
-                  </div>
-                </div>
-                {paperResults.map((paper) => (
-                  <div key={paper.id} className="bg-white rounded-xl border border-gray-200 p-5 hover:border-indigo-300 hover:shadow-sm transition-all">
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 mt-0.5">
-                        <span className={`inline-block w-2.5 h-2.5 rounded-full ${
-                          paper.source === "openalex" ? "bg-blue-400" : paper.source === "pubmed" ? "bg-emerald-400" : "bg-violet-500"
-                        }`} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <a
-                          href={paper.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-semibold text-gray-900 hover:text-indigo-700 transition-colors leading-snug"
-                        >
-                          {paper.title}
-                        </a>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                          {paper.year && (
-                            <span className="text-xs font-medium text-gray-500">{paper.year}</span>
-                          )}
-                          {paper.mapTier && (TIER_COLOR[paper.mapTier] ?? { label: null }).label && (
-                            <span
-                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                              style={{
-                                background: (TIER_COLOR[paper.mapTier]?.fill ?? "#76626b") + "22",
-                                color: TIER_COLOR[paper.mapTier]?.fill ?? "#76626b",
-                              }}
-                            >
-                              {(TIER_COLOR[paper.mapTier] ?? { label: paper.mapTier }).label}
-                            </span>
-                          )}
-                          {paper.venue && (
-                            <span className="text-xs text-gray-400 italic truncate max-w-xs">{paper.venue}</span>
-                          )}
-                          {paper.authors.length > 0 && (
-                            <span className="text-xs text-gray-400">
-                              {paper.authors.slice(0, 3).join(", ")}{paper.authors.length > 3 ? " et al." : ""}
-                            </span>
-                          )}
-                        </div>
-                        {paper.abstract && (
-                          <p className="text-xs text-gray-600 mt-2 leading-relaxed line-clamp-3">
-                            {paper.abstract}
-                          </p>
-                        )}
-                        {relationshipsFor(paper).length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {relationshipsFor(paper).map((rel, i) => {
-                              const style = REL_COLOR[rel.type] ?? REL_FALLBACK;
-                              return (
-                                <span
-                                  key={i}
-                                  className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                                  style={{ background: style.color + "1f", color: style.color }}
-                                  title={rel.other.title}
-                                >
-                                  {style.label} · {rel.other.title.slice(0, 30)}{rel.other.title.length > 30 ? "…" : ""}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                      <a
-                        href={paper.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex-shrink-0 p-1.5 rounded-lg hover:bg-indigo-50 text-gray-300 hover:text-indigo-500 transition-colors"
-                        title="Open paper"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ─── Step 3: Outline ─── */}
-        {step === "outline" && (
-          <div>
-            {!outline ? (
-              <div className="text-center py-20">
-                {loading ? (
-                  <>
-                    <div className="animate-spin h-12 w-12 border-4 border-indigo-600 border-t-transparent rounded-full mx-auto mb-4" />
-                    <p className="text-gray-600">Generating paper outline...</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-gray-500 mb-4">No outline generated yet.</p>
-                    <button
-                      onClick={generateOutline}
-                      className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700"
-                    >
-                      Generate Outline
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="max-w-3xl mx-auto">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-gray-900">{outline.title}</h2>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        const md = outlineToMarkdown(outline);
-                        downloadFile(md, "paper-outline.md");
-                      }}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Download .md
-                    </button>
-                    <button
-                      onClick={() => setStep("ars")}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 flex items-center gap-2"
-                    >
-                      Run /ars-plan →
-                    </button>
-                  </div>
-                </div>
-
-                {/* Abstract */}
-                <div className="bg-slate-50 rounded-xl p-5 mb-5 border border-slate-200">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Abstract</p>
-                  <p className="text-sm text-slate-700 leading-relaxed">{outline.abstract}</p>
-                </div>
-
-                {/* Sections */}
-                <div className="space-y-4">
-                  {outline.sections?.map((section, si) => (
-                    <div key={si} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                      <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                        <span className="w-6 h-6 bg-indigo-100 text-indigo-700 rounded-md flex items-center justify-center text-xs font-bold">
-                          {si + 1}
-                        </span>
-                        {section.name}
-                      </h3>
-                      <div className="space-y-3">
-                        {section.subsections?.map((sub, ssi) => (
-                          <div key={ssi} className="pl-4 border-l-2 border-gray-100">
-                            <p className="text-sm font-medium text-gray-700 mb-1">{sub.heading}</p>
-                            <ul className="space-y-0.5">
-                              {sub.keyPoints?.map((point, pi) => (
-                                <li key={pi} className="text-xs text-gray-500 flex gap-2">
-                                  <span className="text-indigo-300 mt-0.5">•</span>
-                                  {point}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Key references */}
-                {outline.keyReferences?.length > 0 && (
-                  <div className="mt-5 bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-                    <h3 className="font-semibold text-gray-900 mb-3">Key References</h3>
-                    <ul className="space-y-1">
-                      {outline.keyReferences.map((ref, i) => (
-                        <li key={i} className="text-xs text-gray-600 flex gap-2">
-                          <span className="text-gray-400">[{i + 1}]</span>
-                          {ref}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ─── Step 3: /ars-plan embedded chat + Atlas Assistant ─── */}
-        {step === "ars" && (
+        {/* ─── Step 2: Atlas Plan + Atlas Assistant ─── */}
+        {step === "plan" && (
           <div className="flex flex-col xl:flex-row gap-6 h-[calc(100vh-220px)] min-h-[520px]">
-            {/* ARS Plan chat (Claude) */}
+            {/* Atlas Plan */}
             <div className="flex-1 min-w-0 min-h-[420px] xl:min-h-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-              <ARSPlanChat key={selectedIdeaIndex} jobId={jobId} selectedIdea={idea} referenceDoc={referenceDoc ?? undefined} />
+              <AtlasPlan
+                key={selectedIdeaIndex}
+                jobId={jobId}
+                topicQuery={topicQuery}
+                selectedIdea={idea}
+                referenceDoc={referenceDoc ?? undefined}
+                extraSources={paperResults.map((p) => ({ title: p.title, snippet: p.abstract || null }))}
+              />
             </div>
 
             {/* Atlas Assistant chat (Groq, note-taking) */}
@@ -910,9 +725,9 @@ function PaperPipelineInner() {
               <div className="rounded-2xl p-5" style={{ background: "linear-gradient(135deg, #5f4e56, #384a54)", color: "#fbf8f1" }}>
                 <h3 className="font-bold mb-1 text-sm">Two agents, one paper</h3>
                 <p className="text-xs leading-relaxed" style={{ color: "#d6c9cf" }}>
-                  <strong>ARS Plan</strong> (left) is the Socratic planner powered by Claude.{" "}
-                  <strong>Atlas Assistant</strong> (middle) is grounded in your session evidence,
-                  answers questions, and saves key replies to your notes.
+                  <strong>Atlas Plan</strong> (left) drafts a contribution statement, claims, and an
+                  outline from your evidence. <strong>Atlas Assistant</strong> (middle) is grounded in
+                  your session evidence, answers questions, and saves key replies to your notes.
                 </p>
               </div>
 
@@ -995,16 +810,16 @@ function PaperPipelineInner() {
               </div>
 
               <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm space-y-3">
-                <p className="text-sm font-semibold text-gray-800">Export context for Claude Code</p>
+                <p className="text-sm font-semibold text-gray-800">Export context</p>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  Want the full 12-agent ARS pipeline (peer review, LaTeX output, citation verification)?
-                  Export your context and continue in Claude Code.
+                  Export your research context as plain Markdown — paste it into any editor or agent
+                  you use for writing.
                 </p>
                 <div className="space-y-2">
                   <button
                     onClick={() => {
-                      if (!arsContext) generateContext();
-                      else copyToClipboard(arsContext);
+                      if (!exportContext) generateContext();
+                      else copyToClipboard(exportContext);
                     }}
                     disabled={loading}
                     className="w-full py-2 px-3 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
@@ -1016,11 +831,11 @@ function PaperPipelineInner() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                       </svg>
                     )}
-                    {copied ? "Copied!" : arsContext ? "Copy Context" : "Generate & Copy"}
+                    {copied ? "Copied!" : exportContext ? "Copy Context" : "Generate & Copy"}
                   </button>
-                  {arsContext && (
+                  {exportContext && (
                     <button
-                      onClick={() => downloadFile(arsContext, "ars-context.md")}
+                      onClick={() => downloadFile(exportContext, "research-context.md")}
                       className="w-full py-2 px-3 border border-gray-300 text-gray-700 rounded-lg text-xs hover:bg-gray-50"
                     >
                       Download .md
@@ -1063,34 +878,11 @@ function PaperPipelineInner() {
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
-                <p className="text-xs font-semibold text-gray-700 mb-2">Claude Code commands</p>
-                <div className="space-y-1.5">
-                  {[
-                    { cmd: "/ars-plan", desc: "Socratic planning (this)" },
-                    { cmd: "/ars-outline", desc: "Quick outline + evidence map" },
-                    { cmd: "/ars-full", desc: "Full pipeline: write → review" },
-                  ].map(({ cmd, desc }) => (
-                    <div key={cmd} className="flex items-start gap-2">
-                      <code className="text-xs bg-gray-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono flex-shrink-0">
-                        {cmd}
-                      </code>
-                      <span className="text-xs text-gray-500">{desc}</span>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-                  Install:{" "}
-                  <code className="font-mono text-gray-500 text-xs">
-                    /plugin marketplace add<br />Imbad0202/academic-research-skills
-                  </code>
-                </p>
-              </div>
             </div>
           </div>
         )}
 
-        {/* ─── Step 5: Experiments — plan chat + claims verification ─── */}
+        {/* ─── Step 3: Experiments — plan chat + claims verification ─── */}
         {step === "experiments" && (
           <div className="flex flex-col xl:flex-row gap-6 h-[calc(100vh-220px)] min-h-[520px]">
             <div className="flex-1 min-w-0 min-h-[420px] xl:min-h-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
@@ -1139,29 +931,4 @@ export default function PaperPipelinePage() {
       <PaperPipelineInner />
     </Suspense>
   );
-}
-
-function outlineToMarkdown(outline: Outline): string {
-  const lines: string[] = [
-    `# ${outline.title}`,
-    "",
-    "## Abstract",
-    outline.abstract,
-    "",
-  ];
-  for (const section of outline.sections ?? []) {
-    lines.push(`## ${section.name}`, "");
-    for (const sub of section.subsections ?? []) {
-      lines.push(`### ${sub.heading}`, "");
-      for (const point of sub.keyPoints ?? []) {
-        lines.push(`- ${point}`);
-      }
-      lines.push("");
-    }
-  }
-  if (outline.keyReferences?.length) {
-    lines.push("## References", "");
-    outline.keyReferences.forEach((r, i) => lines.push(`[${i + 1}] ${r}`));
-  }
-  return lines.join("\n");
 }

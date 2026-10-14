@@ -229,6 +229,7 @@ const sections = [
   { id: "troubleshoot", label: "Troubleshooting" },
   { id: "faq", label: "FAQ" },
   { id: "pricing", label: "Pricing" },
+  { id: "acknowledgments", label: "Acknowledgments" },
 ];
 
 /* ── page ─────────────────────────────────────────────── */
@@ -728,8 +729,45 @@ export default function DocsPage() {
             </div>
           </section>
 
+          <section id="acknowledgments">
+            <h2 className="text-3xl font-bold text-zinc-900 mb-2">Acknowledgments and prior art</h2>
+            <p className="text-zinc-600 mb-4">
+              Atlas's review and planning are original implementations; the projects below informed the design.
+              No code or prompts are copied.
+            </p>
+            <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-50 text-zinc-500 text-xs uppercase tracking-wide">
+                  <tr>
+                    <th className="text-left px-4 py-2">Project</th>
+                    <th className="text-left px-4 py-2">What it informed</th>
+                    <th className="text-left px-4 py-2">License</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {[
+                    ["Academic Research Skills (Cheng-I Wu)", "Earlier paper-planning integration (V2), replaced by Atlas Plan", "CC-BY-NC 4.0"],
+                    ["poldrack/ai-peer-review", "Multiple independent reviewers plus a meta-review", "MIT"],
+                    ["FanBroWell/AI-paper-reviewer", "Pre-submission checks on claims, experiments and citations", "MIT"],
+                    ["JShi12/AI-literature-review-assistant", "Citations tied to source passages", "MIT"],
+                    ["The AI Scientist (Lu et al., 2024)", "Automated review and benchmarking reviews against ICLR", "AI Scientist Source Code License"],
+                    ["SelfCheckGPT (Manakul et al., EMNLP 2023)", "Self-consistency for hallucination detection", "MIT"],
+                    ["MiniCheck (Tang et al., EMNLP 2024)", "Checking claims against grounding documents", "Apache-2.0"],
+                    ["DeBERTa-v3 NLI", "The default entailment model used for claim grounding", "Check the model card"],
+                  ].map(([project, informed, license]) => (
+                    <tr key={project}>
+                      <td className="px-4 py-2 font-medium text-zinc-800">{project}</td>
+                      <td className="px-4 py-2 text-zinc-600">{informed}</td>
+                      <td className="px-4 py-2 text-zinc-500">{license}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
           <div className="pt-4 pb-8 text-center text-xs text-zinc-400">
-            Hypothesis Atlas &middot; MIT License &middot;{" "}
+            Hypothesis Atlas &middot; AGPL-3.0 License &middot;{" "}
             <Link href="/" className="underline">
               Home
             </Link>
