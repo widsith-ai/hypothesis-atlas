@@ -84,12 +84,15 @@ Three steps: **Setup → Plan → Experiments**.
 - Results cached in localStorage; re-run or clear anytime
 
 ### Persistent Research Graph
-- **Cross-run knowledge graph** at `/graph` (nav button on Explore): every completed run automatically syncs its topics, hypotheses, methods, evidence, and gaps into a single persistent graph in PostgreSQL — your research memory across all sessions
-- **Deduplicated by design**: entities are keyed by (type, normalized label), so the same concept found in different runs converges onto one node; papers collapse by title; `POST /api/graph/dedupe` merges any stragglers (user-created entities always win the merge)
+- **Cross-run knowledge graph** at `/graph` (nav button on Explore): every completed run automatically syncs its topics, hypotheses, methods, evidence, gaps, outcomes, and datasets into a single persistent graph in PostgreSQL — your research memory across all sessions
+- **Workspace-isolated**: every entity and edge belongs to a workspace (your account, or a shared `default` workspace when self-hosted/anonymous) — two accounts' graphs never collide even when they discover the same concept; visibility (private / shared / public) controls who else can read it, one PATCH away
+- **Deduplicated by design**: entities are keyed by (workspace, type, normalized label), so the same concept found in different runs converges onto one node; papers collapse by title; `POST /api/graph/dedupe` merges any stragglers (user-created entities always win the merge)
+- **Verified before it's written**: every finding and disagreement a run produces is checked against its own sources (sanitize → split into single claims → overlap/NLI/LLM-judge grounding) before syncing; a claim that fails the check is **never dropped** — it's still written, just badged (unsupported / contradicted / unverified) so you can see it in the graph
+- **Negative results get kept**: record an outcome (result, failure mode, effect, conditions) against any hypothesis; its status (proposed → grounded → under test → supported / refuted / inconclusive, or abandoned with a reason) is computed from its outcomes automatically — a single refuted outcome outweighs any number of supporting ones. Refuted and abandoned hypotheses get their own **Graveyard** view (`/graveyard`), filterable by method and dataset, so failed work stays visible instead of looking identical to everything still open
 - **Ask across all runs**: type "what have I learned about X" and Groq synthesizes an answer grounded in the matched entities, their connected context, and the supporting papers — with inline citations and a key-takeaways / open-gaps breakdown
-- **Full graph editing**: create, edit, and delete entities and edges; connect any two entities with typed relationships (motivates / provides / uses method / contradicts / reveals / related to / notes on)
+- **Full graph editing**: create, edit, and delete entities and edges; connect any two entities with typed relationships (motivates / supports / uses method / contradicts / reveals / related to / notes on / tests / uses dataset / derived from / transferred from / replicates)
 - **Origin tracking**: run-derived entities refresh on every re-sync; anything you create or edit is marked user-created/user-edited (white ring on the canvas) and is never overwritten
-- **Provenance**: every entity carries its supporting papers — click a node to see the source list and jump back to the originating run
+- **Provenance**: every entity carries its supporting papers (with the exact matched passage, when the verification gate found one) — click a node to see the source list and jump back to the originating run. Each run's own step-by-step log — every prompt, model, seed, tool call, and the records it produced — is on the job's **Run Provenance** tab, exportable as a reproducibility bundle
 - **Interactive canvas**: force-directed layout, type filter chips with counts, entity search, wheel zoom / drag pan, and a per-node inspector with inline editing
 - **Notes live in the graph**: job notes are stored as graph entities (not localStorage) with automatic one-time migration of existing local notes; they feed cross-run queries like everything else
 
@@ -225,6 +228,37 @@ docker-compose down -v && docker-compose up -d postgres redis && npm run db:push
 ---
 
 ## Version History
+
+### V3.0.5 — Run Provenance
+
+`ProgressEvent` already logged job-level stage events ("fetch_papers: started"); nothing logged the individual agent steps within a stage — the exact prompt sent, which model answered, which tools were called, what came back — or attached that to the records a run produced. Every LLM call in the evidence-mapping pipeline now generates and logs a seed (actually sent to Groq, so the call is replayable), and every tool-call batch (OpenAlex+PubMed, GEO, social) logs which tools were called; both attach the resulting log entry to the nodes/sources they produced. A new **Run Provenance** tab on the job page shows a card per logged step — model, seed, tools, prompt, and a "human-edited since" badge when a record it produced was later hand-edited — plus a one-click export of the whole run as a reproducibility bundle (model calls with seeds, dataset/paper versions, full log). See #58.
+
+#### New API routes (V3.0.5)
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/jobs/[id]/run-log` | GET | A run's full step-by-step log, each step flagged `humanEdited` if one of its records was later hand-edited |
+| `/api/jobs/[id]/reproducibility-bundle` | GET | Downloadable JSON bundle: every model call with its seed, dataset/paper versions, the full run log |
+
+### V3.0.3 — Negative Results
+
+Every hypothesis implicitly looked "open" — there was no way to record that one was tested and failed, or abandoned. You can now record an **outcome** (result, failure mode, effect, conditions) against any hypothesis; its status — proposed → grounded → under test → supported / refuted / inconclusive, or abandoned with a required reason — is computed from its outcomes automatically, and a single refuted outcome always outweighs any number of supporting ones. A new **Graveyard** page (`/graveyard`, linked from Explore and the graph header) lists refuted and abandoned hypotheses, filterable by method and dataset; method entities in the graph inspector automatically collect the known failure modes of hypotheses tested with them. Outcomes are private by default, with one-click sharing (now available on any entity). See #56.
+
+#### New API routes (V3.0.3)
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/graph/outcomes` | POST | Record an outcome against a hypothesis (creates the outcome entity + its `tests` edge in one call) |
+| `/api/graph/graveyard` | GET | Refuted/abandoned hypotheses only, filterable by `?method=` / `?dataset=` |
+| `/api/graph/entities/[id]` | PATCH | Gained `visibility` (one-click sharing) and `abandonedReason` (set to abandon with a reason; `null` to un-abandon) |
+
+### V3.0.2 — Claim Record & Verification Gate
+
+Claims used to flow into the graph with no check against their source text. Every finding and disagreement a run produces is now run through a `verifyClaim()` gate (pulled out of the peer-review grounding pipeline so it works against arbitrary source text, not just a declared-span PDF) before being written: sanitize → split into single claims → check inline citations → ground each sub-claim against its sources. A claim that fails the check is **never dropped** — it's written and badged (unsupported / contradicted / unverified) instead. `provides` was renamed `supports` (evidence → hypothesis is the correct direction) and gained `tests` / `uses_dataset` / `derived_from` / `transferred_from` / `replicates` as edge types; entities and edges both carry producer and verification stamps, and source links can now exact-match a passage (`start`/`end`/`text`) and record `role: "contradicting"`, not just `"supporting"`. `atlas.claim/v1`, the JSON Schema for a claim record, is published under its own MIT license in `schemas/`, separate from this repo's AGPL license. See #55.
+
+### V3.0.1 — Unblock the Graph: Workspace Isolation & Visibility
+
+Two different accounts' graph entities sharing the same type and label used to collide into a single record — nothing under `/api/graph` checked who was asking. Every `GraphEntity`/`GraphEdge` now belongs to a workspace (your account, or a shared `default` workspace for anonymous/self-hosted use) and carries a visibility (private by default, widenable to shared/public); every `/api/graph` route enforces it on every read and write, and `Job.userId` ownership is enforced on the routes that sync or back-fill a run into the graph. Unowned ("default" workspace) data stays exactly as open as it was before accounts existed — only another account's private data is now actually private. See #54.
 
 ### V3.0.0.2 — Paper pipeline redesign around Atlas Plan
 
