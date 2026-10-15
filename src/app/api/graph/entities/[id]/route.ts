@@ -60,6 +60,7 @@ export async function PATCH(
       (content !== undefined && data.content !== existing.content)
     if (semanticChange && existing.origin === 'system') {
       data.origin = 'user'
+      data.producer = session?.user?.id ?? 'anonymous'
     }
 
     const entity = await prisma.graphEntity.update({ where: { id: params.id }, data })

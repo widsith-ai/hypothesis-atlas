@@ -22,6 +22,7 @@ interface GraphEntity {
   jobId: string | null;
   origin: string;
   pinned: boolean;
+  status?: string | null;
   createdAt: string;
   updatedAt: string;
   sources: GraphSource[];
@@ -51,26 +52,47 @@ const TYPE_META: Record<string, { label: string; color: string; bg: string }> = 
   evidence:   { label: "Evidence",   color: "#567d5e", bg: "bg-emerald-500" },
   gap:        { label: "Gap",        color: "#a87732", bg: "bg-amber-500" },
   note:       { label: "Note",       color: "#b54a33", bg: "bg-rose-500" },
+  outcome:    { label: "Outcome",    color: "#3f6b4f", bg: "bg-teal-500" },
+  dataset:    { label: "Dataset",    color: "#5a6a8c", bg: "bg-sky-500" },
+};
+
+// #55/V3.0.2: badges shown next to an entity whose verifyClaim() status
+// isn't 'grounded' — unsupported/contradicted claims stay in the graph,
+// just visibly flagged, instead of being dropped.
+const STATUS_BADGES: Record<string, { label: string; color: string }> = {
+  unsupported: { label: "unsupported", color: "#a87732" },
+  contradicted: { label: "contradicted", color: "#b54a33" },
+  unavailable: { label: "unverified", color: "#a39a89" },
 };
 
 const EDGE_LABELS: Record<string, string> = {
   motivates: "motivates",
-  provides: "provides",
+  supports: "supports",
   uses_method: "uses method",
   contradicts: "contradicts",
   reveals: "reveals",
   related_to: "related to",
   notes_on: "notes on",
+  tests: "tests",
+  uses_dataset: "uses dataset",
+  derived_from: "derived from",
+  transferred_from: "transferred from",
+  replicates: "replicates",
 };
 
 const EDGE_COLORS: Record<string, string> = {
   motivates: "#76626b",
-  provides: "#567d5e",
+  supports: "#567d5e",
   uses_method: "#4c777c",
   contradicts: "#b54a33",
   reveals: "#a87732",
   related_to: "#a39a89",
   notes_on: "#b54a33",
+  tests: "#4c777c",
+  uses_dataset: "#5a6a8c",
+  derived_from: "#a39a89",
+  transferred_from: "#a39a89",
+  replicates: "#3f6b4f",
 };
 
 const THEME_STYLES = {
@@ -860,6 +882,15 @@ export default function ResearchGraphPage() {
                     <span className={`text-xs flex-shrink-0 ${t.subText}`}>
                       {selected.origin === "user" ? "user-edited" : "run-derived"}
                     </span>
+                    {selected.status && STATUS_BADGES[selected.status] && (
+                      <span
+                        className="text-xs font-semibold px-2 py-0.5 rounded-full text-white flex-shrink-0"
+                        style={{ background: STATUS_BADGES[selected.status].color }}
+                        title="Verification status from the claim-check gate"
+                      >
+                        {STATUS_BADGES[selected.status].label}
+                      </span>
+                    )}
                   </div>
                   <button onClick={() => setSelectedId(null)} className={`p-1 rounded-lg ${t.subText} hover:opacity-70`}>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

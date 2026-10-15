@@ -495,6 +495,30 @@ async function verifyReference(candidate: { citation: string; title: string | nu
   }
 }
 
+// Unlike verifyReferences (which only looks inside a detected References/
+// Bibliography section), this scans arbitrary text for inline DOIs — used by
+// claimVerification.ts's verifyClaim() gate, where a "claim" is a short
+// graph-entity label/content string with no section structure of its own.
+export async function verifyInlineCitations(text: string): Promise<ReferenceVerification[]> {
+  const dois = [...new Set(
+    [...text.matchAll(DOI_PATTERN)]
+      .map((match) => normalizeDoi(match[0]))
+      .filter((doi): doi is string => Boolean(doi))
+  )]
+  const results: ReferenceVerification[] = []
+  for (let i = 0; i < dois.length; i++) {
+    const doi = dois[i]
+    const start = text.indexOf(doi)
+    results.push(
+      await verifyReference(
+        { citation: doi, title: null, doi, start: start >= 0 ? start : 0, end: start >= 0 ? start + doi.length : doi.length },
+        i
+      )
+    )
+  }
+  return results
+}
+
 export async function verifyReferences(text: string): Promise<ReferenceVerification[]> {
   const candidates = extractReferenceCandidates(text)
   const results: ReferenceVerification[] = []

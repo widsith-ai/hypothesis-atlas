@@ -26,6 +26,9 @@ export async function POST(request: NextRequest) {
     // (the shared "default" one when anonymous), same as before accounts existed.
     const session = await getServerSession(authOptions)
     const workspaceId = resolveWorkspaceId(session?.user?.id)
+    // #55/V3.0.2: a manually created entity is stamped with its creator's
+    // identity, same granularity as the system-synced 'research-agent' stamp.
+    const producer = session?.user?.id ?? 'anonymous'
 
     const entity = await prisma.graphEntity.create({
       data: {
@@ -35,6 +38,7 @@ export async function POST(request: NextRequest) {
         jobId: typeof jobId === 'string' && jobId ? jobId : null,
         origin: 'user',
         workspaceId,
+        producer,
       },
     })
 
@@ -51,6 +55,7 @@ export async function POST(request: NextRequest) {
               type: edgeType,
               origin: 'user',
               workspaceId,
+              producer,
             },
           })
         } catch (err) {

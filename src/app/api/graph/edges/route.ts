@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
           jobId: typeof jobId === 'string' && jobId ? jobId : null,
           origin: 'user',
           workspaceId,
+          producer: session?.user?.id ?? 'anonymous',
         },
       })
       return NextResponse.json({ edge }, { status: 201 })

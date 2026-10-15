@@ -1,20 +1,32 @@
+import { createHash } from 'crypto'
 import { prisma } from './prisma'
 import { emitProgressEvent } from './events'
 import { resolveWorkspaceId } from './graphAccess'
+import { verifyClaim, type ClaimSource, type ClaimVerificationResult } from './claimVerification'
 
-export const ENTITY_TYPES = ['topic', 'hypothesis', 'method', 'evidence', 'gap', 'note'] as const
+export const ENTITY_TYPES = ['topic', 'hypothesis', 'method', 'evidence', 'gap', 'note', 'outcome', 'dataset'] as const
 export const EDGE_TYPES = [
   'motivates',
-  'provides',
+  'supports',
   'uses_method',
   'contradicts',
   'reveals',
   'related_to',
   'notes_on',
+  'tests',
+  'uses_dataset',
+  'derived_from',
+  'transferred_from',
+  'replicates',
 ] as const
 
 export type EntityType = (typeof ENTITY_TYPES)[number]
 export type EdgeType = (typeof EDGE_TYPES)[number]
+
+// #55/V3.0.2: coarse "who/what wrote this" stamp for everything syncJobGraph
+// produces. A full per-agent identity (model, version, tool calls) is #58's
+// job — this just distinguishes agent-written records from human-written ones.
+const SYNC_PRODUCER = 'research-agent'
 
 export function isEntityType(v: unknown): v is EntityType {
   return typeof v === 'string' && (ENTITY_TYPES as readonly string[]).includes(v)
@@ -34,6 +46,10 @@ function globalSyncKey(type: EntityType, label: string): string {
   return `g:${type}:${normalizeLabel(label)}`
 }
 
+function computeContentHash(type: string, label: string, content: string | null): string {
+  return createHash('sha256').update(`${type}\u0000${label}\u0000${content ?? ''}`).digest('hex')
+}
+
 function parseJsonArray(raw: string | null | undefined): string[] {
   if (!raw) return []
   try {
@@ -47,6 +63,19 @@ function parseJsonArray(raw: string | null | undefined): string[] {
   }
 }
 
+type VerificationStamp = Pick<ClaimVerificationResult, 'status' | 'method' | 'confidence' | 'checkedAt' | 'verifier'>
+
+function verificationFieldsOf(verification: VerificationStamp | null | undefined): Record<string, unknown> {
+  if (!verification) return {}
+  return {
+    status: verification.status,
+    method: verification.method,
+    confidence: verification.confidence,
+    checkedAt: verification.checkedAt,
+    verifier: verification.verifier,
+  }
+}
+
 interface UpsertEntityOpts {
   type: EntityType
   label: string
@@ -54,6 +83,10 @@ interface UpsertEntityOpts {
   jobId?: string | null
   syncKey: string
   workspaceId: string
+  producer?: string | null
+  domain?: string | null
+  supersedes?: string | null
+  verification?: VerificationStamp | null
 }
 
 // Upsert keyed on (workspaceId, syncKey) — #54/V3.0.1: syncKey alone used to
@@ -64,15 +97,22 @@ async function upsertEntity(opts: UpsertEntityOpts) {
   const label = opts.label.trim().slice(0, 200)
   if (!label) return null
   const content = opts.content?.trim().slice(0, 4000) || null
+  const contentHash = computeContentHash(opts.type, label, content)
+  const verificationFields = verificationFieldsOf(opts.verification)
 
   const existing = await prisma.graphEntity.findUnique({
     where: { workspaceId_syncKey: { workspaceId: opts.workspaceId, syncKey: opts.syncKey } },
   })
   if (existing) {
-    if (existing.origin === 'system' && (existing.label !== label || existing.content !== content)) {
-      return prisma.graphEntity.update({ where: { id: existing.id }, data: { label, content } })
+    if (existing.origin !== 'system') return existing
+    const data: Record<string, unknown> = { ...verificationFields }
+    if (existing.label !== label || existing.content !== content) {
+      data.label = label
+      data.content = content
+      data.contentHash = contentHash
     }
-    return existing
+    if (Object.keys(data).length === 0) return existing
+    return prisma.graphEntity.update({ where: { id: existing.id }, data })
   }
 
   return prisma.graphEntity.create({
@@ -84,27 +124,67 @@ async function upsertEntity(opts: UpsertEntityOpts) {
       origin: 'system',
       syncKey: opts.syncKey,
       workspaceId: opts.workspaceId,
+      contentHash,
+      producer: opts.producer ?? null,
+      domain: opts.domain ?? null,
+      supersedes: opts.supersedes ?? null,
+      ...verificationFields,
     },
   })
 }
 
-async function upsertEdge(fromId: string, toId: string, type: EdgeType, workspaceId: string, jobId?: string | null) {
+interface UpsertEdgeOpts {
+  producer?: string | null
+  verification?: VerificationStamp | null
+}
+
+async function upsertEdge(
+  fromId: string,
+  toId: string,
+  type: EdgeType,
+  workspaceId: string,
+  jobId?: string | null,
+  opts?: UpsertEdgeOpts
+) {
   if (fromId === toId) return
+  const verificationFields = verificationFieldsOf(opts?.verification)
   await prisma.graphEdge.upsert({
     where: { fromId_toId_type: { fromId, toId, type } },
-    update: {},
-    create: { fromId, toId, type, jobId: jobId ?? null, origin: 'system', workspaceId },
+    update: verificationFields,
+    create: {
+      fromId,
+      toId,
+      type,
+      jobId: jobId ?? null,
+      origin: 'system',
+      workspaceId,
+      producer: opts?.producer ?? null,
+      ...verificationFields,
+    },
   })
 }
 
-async function linkSources(entityId: string, sourceIds: string[]) {
+async function linkSources(
+  entityId: string,
+  sourceIds: string[],
+  role: 'supporting' | 'contradicting' = 'supporting',
+  passages?: Map<string, { start: number; end: number; text: string }>
+) {
   for (const sourceId of sourceIds) {
+    const passage = passages?.get(sourceId)
+    const passageFields = passage ? { start: passage.start, end: passage.end, text: passage.text } : {}
     await prisma.entitySource.upsert({
       where: { entityId_sourceId: { entityId, sourceId } },
-      update: {},
-      create: { entityId, sourceId, role: 'supporting' },
+      update: { role, ...passageFields },
+      create: { entityId, sourceId, role, ...passageFields },
     })
   }
+}
+
+function passageMap(verification: ClaimVerificationResult): Map<string, { start: number; end: number; text: string }> {
+  const map = new Map<string, { start: number; end: number; text: string }>()
+  for (const p of verification.passages) map.set(p.sourceId, { start: p.start, end: p.end, text: p.text })
+  return map
 }
 
 /**
@@ -114,6 +194,11 @@ async function linkSources(entityId: string, sourceIds: string[]) {
  * Node->Source links are preserved as EntitySource provenance. Idempotent via
  * label-based global syncKeys, so concepts found in different runs converge to
  * one entity; a dedupe pass at the end folds in any stragglers.
+ *
+ * #55/V3.0.2: every evidence/counter-evidence claim is run through
+ * verifyClaim() against its node's linked sources before being written —
+ * failing claims are still written (never dropped), just badged with their
+ * verification status so the graph can show them as unsupported/contradicted.
  */
 export async function syncJobGraph(jobId: string): Promise<{ entities: number; edges: number }> {
   const job = await prisma.job.findUnique({
@@ -125,7 +210,11 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
 
   const nodes = await prisma.node.findMany({
     where: { jobId },
-    include: { nodeSources: { select: { sourceId: true, role: true } } },
+    include: {
+      nodeSources: {
+        select: { sourceId: true, role: true, source: { select: { title: true, snippet: true } } },
+      },
+    },
     orderBy: { createdAt: 'asc' },
   })
   if (nodes.length === 0) return { entities: 0, edges: 0 }
@@ -150,10 +239,16 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
       jobId,
       workspaceId,
       syncKey: globalSyncKey('topic', rootNode.label),
+      producer: SYNC_PRODUCER,
     })
   )
 
   const sourceIdsFor = (node: (typeof nodes)[number]) => node.nodeSources.map((ns) => ns.sourceId)
+  const claimSourcesFor = (node: (typeof nodes)[number]): ClaimSource[] =>
+    node.nodeSources.map((ns) => ({
+      id: ns.sourceId,
+      text: [ns.source.title, ns.source.snippet].filter(Boolean).join('. '),
+    }))
 
   if (topicEntity) {
     await linkSources(topicEntity.id, sourceIdsFor(rootNode))
@@ -164,6 +259,7 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
   const rootFindings = parseJsonArray(rootNode.findingsJson)
   const rootGaps = parseJsonArray(rootNode.openProblemsJson)
   const rootDisagreements = parseJsonArray(rootNode.disagreementsJson)
+  const rootClaimSources = claimSourcesFor(rootNode)
 
   if (topicEntity) {
     for (let i = 0; i < rootMethods.length; i++) {
@@ -175,15 +271,17 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           jobId,
           workspaceId,
           syncKey: globalSyncKey('method', rootMethods[i]),
+          producer: SYNC_PRODUCER,
         })
       )
       if (method) {
-        await upsertEdge(topicEntity.id, method.id, 'uses_method', workspaceId, jobId)
+        await upsertEdge(topicEntity.id, method.id, 'uses_method', workspaceId, jobId, { producer: SYNC_PRODUCER })
         edgeCount++
       }
     }
 
     for (let i = 0; i < rootFindings.length; i++) {
+      const verification = await verifyClaim(rootFindings[i], rootClaimSources)
       const evidence = track(
         await upsertEntity({
           type: 'evidence',
@@ -192,11 +290,13 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           jobId,
           workspaceId,
           syncKey: globalSyncKey('evidence', rootFindings[i]),
+          producer: SYNC_PRODUCER,
+          verification,
         })
       )
       if (evidence) {
-        await upsertEdge(topicEntity.id, evidence.id, 'provides', workspaceId, jobId)
-        await linkSources(evidence.id, sourceIdsFor(rootNode))
+        await upsertEdge(evidence.id, topicEntity.id, 'supports', workspaceId, jobId, { producer: SYNC_PRODUCER, verification })
+        await linkSources(evidence.id, sourceIdsFor(rootNode), 'supporting', passageMap(verification))
         edgeCount++
       }
     }
@@ -210,15 +310,17 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           jobId,
           workspaceId,
           syncKey: globalSyncKey('gap', rootGaps[i]),
+          producer: SYNC_PRODUCER,
         })
       )
       if (gap) {
-        await upsertEdge(topicEntity.id, gap.id, 'reveals', workspaceId, jobId)
+        await upsertEdge(topicEntity.id, gap.id, 'reveals', workspaceId, jobId, { producer: SYNC_PRODUCER })
         edgeCount++
       }
     }
 
     for (let i = 0; i < rootDisagreements.length; i++) {
+      const verification = await verifyClaim(rootDisagreements[i], rootClaimSources)
       const counter = track(
         await upsertEntity({
           type: 'evidence',
@@ -227,10 +329,13 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           jobId,
           workspaceId,
           syncKey: globalSyncKey('evidence', rootDisagreements[i]),
+          producer: SYNC_PRODUCER,
+          verification,
         })
       )
       if (counter) {
-        await upsertEdge(counter.id, topicEntity.id, 'contradicts', workspaceId, jobId)
+        await upsertEdge(counter.id, topicEntity.id, 'contradicts', workspaceId, jobId, { producer: SYNC_PRODUCER, verification })
+        await linkSources(counter.id, sourceIdsFor(rootNode), 'contradicting', passageMap(verification))
         edgeCount++
       }
     }
@@ -246,18 +351,21 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
         jobId,
         workspaceId,
         syncKey: globalSyncKey('hypothesis', child.label),
+        producer: SYNC_PRODUCER,
       })
     )
     if (!hypothesis) continue
 
     if (topicEntity) {
-      await upsertEdge(topicEntity.id, hypothesis.id, 'motivates', workspaceId, jobId)
+      await upsertEdge(topicEntity.id, hypothesis.id, 'motivates', workspaceId, jobId, { producer: SYNC_PRODUCER })
       edgeCount++
     }
     await linkSources(hypothesis.id, sourceIdsFor(child))
 
+    const childClaimSources = claimSourcesFor(child)
     const findings = parseJsonArray(child.findingsJson)
     for (let i = 0; i < findings.length; i++) {
+      const verification = await verifyClaim(findings[i], childClaimSources)
       const evidence = track(
         await upsertEntity({
           type: 'evidence',
@@ -266,11 +374,13 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           jobId,
           workspaceId,
           syncKey: globalSyncKey('evidence', findings[i]),
+          producer: SYNC_PRODUCER,
+          verification,
         })
       )
       if (evidence) {
-        await upsertEdge(hypothesis.id, evidence.id, 'provides', workspaceId, jobId)
-        await linkSources(evidence.id, sourceIdsFor(child))
+        await upsertEdge(evidence.id, hypothesis.id, 'supports', workspaceId, jobId, { producer: SYNC_PRODUCER, verification })
+        await linkSources(evidence.id, sourceIdsFor(child), 'supporting', passageMap(verification))
         edgeCount++
       }
     }
@@ -285,16 +395,18 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           jobId,
           workspaceId,
           syncKey: globalSyncKey('gap', gaps[i]),
+          producer: SYNC_PRODUCER,
         })
       )
       if (gap) {
-        await upsertEdge(hypothesis.id, gap.id, 'reveals', workspaceId, jobId)
+        await upsertEdge(hypothesis.id, gap.id, 'reveals', workspaceId, jobId, { producer: SYNC_PRODUCER })
         edgeCount++
       }
     }
 
     const disagreements = parseJsonArray(child.disagreementsJson)
     for (let i = 0; i < disagreements.length; i++) {
+      const verification = await verifyClaim(disagreements[i], childClaimSources)
       const counter = track(
         await upsertEntity({
           type: 'evidence',
@@ -303,10 +415,13 @@ export async function syncJobGraph(jobId: string): Promise<{ entities: number; e
           jobId,
           workspaceId,
           syncKey: globalSyncKey('evidence', disagreements[i]),
+          producer: SYNC_PRODUCER,
+          verification,
         })
       )
       if (counter) {
-        await upsertEdge(counter.id, hypothesis.id, 'contradicts', workspaceId, jobId)
+        await upsertEdge(counter.id, hypothesis.id, 'contradicts', workspaceId, jobId, { producer: SYNC_PRODUCER, verification })
+        await linkSources(counter.id, sourceIdsFor(child), 'contradicting', passageMap(verification))
         edgeCount++
       }
     }
