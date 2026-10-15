@@ -12,6 +12,7 @@ import NotesPanel from "@/components/NotesPanel";
 import NotesTab from "@/components/NotesTab";
 import QuestionBot from "@/components/QuestionBot";
 import InkSeal from "@/components/ink/InkSeal";
+import RunProvenance from "@/components/RunProvenance";
 
 interface Job {
   id: string;
@@ -99,7 +100,7 @@ export default function JobPage() {
   const [jobError, setJobError] = useState<string | null>(null);
   const [events, setEvents] = useState<ProgressEvent[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"knowledge" | "notebook" | "papermap" | "notes">(
+  const [activeTab, setActiveTab] = useState<"knowledge" | "notebook" | "papermap" | "notes" | "provenance">(
     "knowledge",
   );
   const [theme, setTheme] = useState<Theme>("light");
@@ -133,8 +134,8 @@ export default function JobPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get("tab");
-    if (tabParam && ["knowledge", "notebook", "papermap", "notes"].includes(tabParam)) {
-      setActiveTab(tabParam as "knowledge" | "notebook" | "papermap" | "notes");
+    if (tabParam && ["knowledge", "notebook", "papermap", "notes", "provenance"].includes(tabParam)) {
+      setActiveTab(tabParam as "knowledge" | "notebook" | "papermap" | "notes" | "provenance");
     }
   }, []);
 
@@ -388,6 +389,22 @@ export default function JobPage() {
               </div>
             </button>
 
+            <button
+              onClick={() => setActiveTab("provenance")}
+              className={`py-3 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === "provenance"
+                  ? t.tabActive
+                  : `border-transparent ${t.tabIdle}`
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Run Provenance
+              </div>
+            </button>
+
             <Link
               href={`/job/${jobId}/paper`}
               className="ml-4 my-auto py-2 px-4 rounded-lg font-semibold text-sm flex items-center gap-2 shadow-sm"
@@ -482,6 +499,8 @@ export default function JobPage() {
           <NotebookTab jobId={jobId} topic={job.topicQuery} theme={theme} />
         ) : activeTab === "notes" ? (
           <NotesTab jobId={jobId} topic={job.topicQuery} theme={theme} />
+        ) : activeTab === "provenance" ? (
+          <RunProvenance jobId={jobId} theme={theme} />
         ) : (
           <PaperMap jobId={jobId} theme={theme} />
         )}
