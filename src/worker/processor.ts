@@ -1,12 +1,20 @@
+import { randomInt } from 'crypto'
 import { prisma } from '../lib/prisma'
 import { emitProgressEvent } from '../lib/events'
 import { searchOpenAlex, reconstructAbstract } from '../lib/apis/openalex'
 import { searchPubMed } from '../lib/apis/pubmed'
 import { searchGEO } from '../lib/apis/geo'
 import { searchSocialSignals } from '../lib/apis/social'
-import { generateWithGroq } from '../lib/groq'
+import { generateWithGroq, GROQ_MODEL } from '../lib/groq'
 import { populateNeo4jGraph } from '../lib/neo4j-paper-graph'
 import { syncJobGraph } from '../lib/research-graph'
+import { logRunStep, attachRunLog } from '../lib/runLog'
+
+// #58/V3.0.5: a fresh seed per agent step, actually sent to the model (see
+// generateWithGroq) and logged alongside it — makes the exact call replayable.
+function newSeed(): number {
+  return randomInt(0, 2 ** 31 - 1)
+}
 
 export async function processEvidenceMapping(data: { jobId: string; topicQuery: string }) {
   const { jobId, topicQuery } = data
@@ -73,9 +81,11 @@ async function expandQuery(jobId: string, query: string): Promise<string[]> {
   })
 
   const prompt = `Given the research topic "${query}", generate 8-12 related keywords, synonyms, and specific subtopics that would help find relevant scientific papers. Return as JSON: {"keywords": ["keyword1", "keyword2", ...]}`
-
-  const result = await generateWithGroq(prompt)
+  const seed = newSeed()
+  const result = await generateWithGroq(prompt, undefined, undefined, seed)
   const keywords = result.keywords || [query]
+
+  await logRunStep({ jobId, step: 'expand_query', prompt, model: GROQ_MODEL, seed, output: result })
 
   await emitProgressEvent({
     jobId,
@@ -150,6 +160,16 @@ async function fetchAllSources(jobId: string, query: string, keywords: string[])
     timestamp: Date.now(),
   })
 
+  {
+    const paperLog = await logRunStep({
+      jobId,
+      step: 'fetch_sources',
+      toolsCalled: ['openalex.search', 'pubmed.search'],
+      output: { query, openAlexCount: openAlexWorks.length, pubmedCount: pubmedArticles.length },
+    })
+    await attachRunLog('source', allSources.map((s) => s.id), paperLog)
+  }
+
   await emitProgressEvent({
     jobId,
     stage: 'fetch_datasets',
@@ -186,6 +206,17 @@ async function fetchAllSources(jobId: string, query: string, keywords: string[])
     timestamp: Date.now(),
   })
 
+  {
+    const datasetSourceIds = allSources.slice(allSources.length - geoDatasets.length).map((s) => s.id)
+    const datasetLog = await logRunStep({
+      jobId,
+      step: 'fetch_sources',
+      toolsCalled: ['geo.search'],
+      output: { query, geoCount: geoDatasets.length },
+    })
+    await attachRunLog('source', datasetSourceIds, datasetLog)
+  }
+
   await emitProgressEvent({
     jobId,
     stage: 'fetch_social',
@@ -221,6 +252,17 @@ async function fetchAllSources(jobId: string, query: string, keywords: string[])
     count: socialSignals.length,
     timestamp: Date.now(),
   })
+
+  {
+    const socialSourceIds = allSources.slice(allSources.length - socialSignals.length).map((s) => s.id)
+    const socialLog = await logRunStep({
+      jobId,
+      step: 'fetch_sources',
+      toolsCalled: ['social.search'],
+      output: { query, socialCount: socialSignals.length },
+    })
+    await attachRunLog('source', socialSourceIds, socialLog)
+  }
 
   return allSources
 }
@@ -310,7 +352,8 @@ You MUST respond with ONLY valid JSON in this exact format (no markdown, no code
 
 Provide at least 3 items for methods, findings, and openProblems. Include disagreements if sources show conflicting views.`
 
-  const analysis = await generateWithGroq(prompt)
+  const seed = newSeed()
+  const analysis = await generateWithGroq(prompt, undefined, undefined, seed)
 
   const node = await prisma.node.create({
     data: {
@@ -324,6 +367,9 @@ Provide at least 3 items for methods, findings, and openProblems. Include disagr
       openProblemsJson: JSON.stringify(analysis.openProblems || []),
     },
   })
+
+  const rootLog = await logRunStep({ jobId, step: 'build_root_node', prompt, model: GROQ_MODEL, seed, output: analysis })
+  await attachRunLog('node', [node.id], rootLog)
 
   for (const source of sources.slice(0, 15)) {
     await prisma.nodeSource.create({
@@ -374,11 +420,13 @@ Identify 4-6 distinct subtopics that are directly and closely related to "${quer
   ]
 }`
 
-  const result = await generateWithGroq(prompt)
+  const subtopicsSeed = newSeed()
+  const result = await generateWithGroq(prompt, undefined, undefined, subtopicsSeed)
   const subtopics = result.subtopics || []
+  await logRunStep({ jobId, step: 'identify_subtopics', prompt, model: GROQ_MODEL, seed: subtopicsSeed, output: result })
 
   for (const subtopic of subtopics.slice(0, 6)) {
-    const childAnalysis = await generateWithGroq(`Analyze the subtopic "${subtopic.label}" (${subtopic.description}) in the context of "${query}" research.
+    const childPrompt = `Analyze the subtopic "${subtopic.label}" (${subtopic.description}) in the context of "${query}" research.
 
 You MUST respond with ONLY valid JSON in this exact format (no markdown, no code blocks):
 {
@@ -388,7 +436,9 @@ You MUST respond with ONLY valid JSON in this exact format (no markdown, no code
   "openProblems": ["challenge 1", "research gap 1", "future direction 1"]
 }
 
-Provide at least 3 items for each array.`)
+Provide at least 3 items for each array.`
+    const childSeed = newSeed()
+    const childAnalysis = await generateWithGroq(childPrompt, undefined, undefined, childSeed)
 
     const childNode = await prisma.node.create({
       data: {
@@ -402,6 +452,9 @@ Provide at least 3 items for each array.`)
         openProblemsJson: JSON.stringify(childAnalysis.openProblems || []),
       },
     })
+
+    const childLog = await logRunStep({ jobId, step: 'build_child_node', prompt: childPrompt, model: GROQ_MODEL, seed: childSeed, output: childAnalysis })
+    await attachRunLog('node', [childNode.id], childLog)
 
     const relevantSources = sources.slice(0, 10)
     for (const source of relevantSources) {
@@ -470,11 +523,13 @@ Identify 3-5 distinct subtopics that are directly and closely related to "${pare
   ]
 }`
 
-    const result = await generateWithGroq(prompt)
+    const subtopicsSeed = newSeed()
+    const result = await generateWithGroq(prompt, undefined, undefined, subtopicsSeed)
     const subtopics = result.subtopics || []
+    await logRunStep({ jobId, step: 'identify_subtopics', prompt, model: GROQ_MODEL, seed: subtopicsSeed, output: result })
 
     for (const subtopic of subtopics.slice(0, 5)) {
-      const childAnalysis = await generateWithGroq(`Analyze the subtopic "${subtopic.label}" (${subtopic.description}) in the context of "${parentLabel}".
+      const childPrompt = `Analyze the subtopic "${subtopic.label}" (${subtopic.description}) in the context of "${parentLabel}".
 
 You MUST respond with ONLY valid JSON in this exact format (no markdown, no code blocks):
 {
@@ -484,9 +539,11 @@ You MUST respond with ONLY valid JSON in this exact format (no markdown, no code
   "openProblems": ["challenge 1", "research gap 1"]
 }
 
-Provide at least 2 items for each array.`)
+Provide at least 2 items for each array.`
+      const childSeed = newSeed()
+      const childAnalysis = await generateWithGroq(childPrompt, undefined, undefined, childSeed)
 
-      await prisma.node.create({
+      const childNode = await prisma.node.create({
         data: {
           jobId,
           parentId: parentNodeId,
@@ -499,6 +556,9 @@ Provide at least 2 items for each array.`)
           depth,
         },
       })
+
+      const childLog = await logRunStep({ jobId, step: 'build_child_node', prompt: childPrompt, model: GROQ_MODEL, seed: childSeed, output: childAnalysis })
+      await attachRunLog('node', [childNode.id], childLog)
     }
 
     await emitProgressEvent({

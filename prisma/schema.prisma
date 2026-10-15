@@ -29,6 +29,7 @@ model Job {
   messages      NotebookMessage[]
   candidates    CandidateTopic[]
   top3Ideas     Top3Ideas?
+  runLog        RunLogEntry[]
 
   @@index([status])
   @@index([createdAt])
@@ -44,11 +45,34 @@ model ProgressEvent {
   count     Int?
   timestamp BigInt
   createdAt DateTime @default(now())
-  
+
   job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  
+
   @@index([jobId])
   @@index([createdAt])
+}
+
+// #58/V3.0.5 — run provenance. ProgressEvent already logs job-level stage
+// events ("fetch_papers: started"); this logs the actual agent steps within
+// a stage: the exact prompt sent, which model answered, which tools/APIs
+// were called, what came back, and which records (Node/Source ids) it
+// produced. See lib/runLog.ts.
+model RunLogEntry {
+  id           String   @id @default(cuid())
+  jobId        String
+  step         String // e.g. 'expand_query' | 'fetch_sources' | 'build_root_node' | 'build_child_node'
+  prompt       String?  @db.Text
+  model        String? // e.g. 'openai/gpt-oss-120b' — null for a pure tool-call step with no LLM involved
+  seed         Int? // the seed actually sent to the model for this call, when one was — makes the call replayable
+  toolsCalled  String?  @db.Text // JSON array, e.g. '["openalex.search","pubmed.search"]'
+  output       String?  @db.Text // the step's raw/serialized result
+  recordIdsJson String? @db.Text // JSON array of Node/Source ids this step produced
+  createdAt    DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([step])
 }
 
 model Source {
@@ -63,15 +87,20 @@ model Source {
   snippet         String?
   externalId      String?
   reliabilityTier String
+  // #58/V3.0.5: which RunLogEntry's tool call fetched this source — provenance
+  // only, not an enforced FK (same pattern as BoldIdea.jobId elsewhere in this
+  // schema), since a run log entry can be pruned independently of its records.
+  runLogId        String?
   createdAt       DateTime @default(now())
-  
+
   job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   nodeSources     NodeSource[]
   entitySources   EntitySource[]
-  
+
   @@index([jobId])
   @@index([type])
   @@index([reliabilityTier])
+  @@index([runLogId])
 }
 
 model Node {
@@ -85,8 +114,11 @@ model Node {
   disagreementsJson   String?  @db.Text
   openProblemsJson    String?  @db.Text
   depth               Int      @default(0)
+  // #58/V3.0.5: which RunLogEntry's prompt produced this node — provenance
+  // only, not an enforced FK (see Source.runLogId above).
+  runLogId            String?
   createdAt           DateTime @default(now())
-  
+
   job                 Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
   parent              Node?    @relation("NodeChildren", fields: [parentId], references: [id], onDelete: Cascade)
   children            Node[]   @relation("NodeChildren")
@@ -94,6 +126,7 @@ model Node {
   
   @@index([jobId])
   @@index([parentId])
+  @@index([runLogId])
 }
 
 model NodeSource {
