@@ -41,7 +41,7 @@ describe('POST /api/graph/edges', () => {
     expect(res.status).toBe(201)
     expect(body.edge.id).toBe('edge-1')
     expect(prismaMock.graphEdge.create).toHaveBeenCalledWith({
-      data: { fromId: 'from-1', toId: 'to-1', type: 'motivates', jobId: null, origin: 'user', workspaceId: 'default' },
+      data: { fromId: 'from-1', toId: 'to-1', type: 'motivates', jobId: null, origin: 'user', workspaceId: 'default', producer: 'anonymous' },
     })
   })
 

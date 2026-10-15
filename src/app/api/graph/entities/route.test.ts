@@ -36,7 +36,7 @@ describe('POST /api/graph/entities', () => {
     expect(res.status).toBe(201)
     expect(body.entity).toEqual({ id: 'e1', type: 'note', label: 'My note' })
     expect(prismaMock.graphEntity.create).toHaveBeenCalledWith({
-      data: { type: 'note', label: 'My note', content: null, jobId: null, origin: 'user', workspaceId: 'default' },
+      data: { type: 'note', label: 'My note', content: null, jobId: null, origin: 'user', workspaceId: 'default', producer: 'anonymous' },
     })
   })
 
@@ -45,7 +45,7 @@ describe('POST /api/graph/entities', () => {
     prismaMock.graphEntity.create.mockResolvedValue({ id: 'e1', type: 'note', label: 'My note' })
     await POST(postRequest({ type: 'note', label: 'My note' }))
     expect(prismaMock.graphEntity.create).toHaveBeenCalledWith({
-      data: { type: 'note', label: 'My note', content: null, jobId: null, origin: 'user', workspaceId: 'user-1' },
+      data: { type: 'note', label: 'My note', content: null, jobId: null, origin: 'user', workspaceId: 'user-1', producer: 'user-1' },
     })
   })
 
@@ -69,7 +69,7 @@ describe('POST /api/graph/entities', () => {
 
     expect(res.status).toBe(201)
     expect(prismaMock.graphEdge.create).toHaveBeenCalledWith({
-      data: { fromId: 'e1', toId: 'target-1', type: 'related_to', origin: 'user', workspaceId: 'default' },
+      data: { fromId: 'e1', toId: 'target-1', type: 'related_to', origin: 'user', workspaceId: 'default', producer: 'anonymous' },
     })
   })
 

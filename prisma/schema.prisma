@@ -211,7 +211,7 @@ model PaperSubscription {
 
 model GraphEntity {
   id           String   @id @default(cuid())
-  type         String   // 'topic' | 'hypothesis' | 'method' | 'evidence' | 'gap' | 'note'
+  type         String   // 'topic' | 'hypothesis' | 'method' | 'evidence' | 'gap' | 'note' | 'outcome' | 'dataset'
   label        String
   content      String?  @db.Text
   jobId        String?  // provenance: run that produced it (survives job deletion)
@@ -232,6 +232,33 @@ model GraphEntity {
   visibility   String   @default("private")
   metadataJson String?  @db.Text // e.g. {"noteType":"manual"} for notes
   pinned       Boolean  @default(false)
+  // #55/V3.0.2: domain classification (e.g. "biology"), unset until a
+  // classifier exists — just plumbing for now, settable manually.
+  domain       String?
+  // sha256 of (type, label, content) — lets a future supersede pass detect
+  // "this record's substance actually changed" without a full diff.
+  contentHash  String?
+  // Bumped only if this entity's JSON shape (metadataJson etc.) changes in
+  // a backwards-incompatible way; starts at 1 for every row written so far.
+  schemaVersion Int     @default(1)
+  // Id of the GraphEntity this one supersedes (e.g. a replicated outcome
+  // superseding an earlier one) — self-referencing, not enforced as an FK
+  // since the superseded row may since have been deleted/merged.
+  supersedes   String?
+  // Coarse "who/what wrote this": 'research-agent' for run-synced records,
+  // or the creating user's id ('anonymous' when none) for manual ones. A
+  // full per-agent identity (model, version, tool calls) is #58's job —
+  // this is just enough to answer "human or agent, and which one."
+  producer     String?
+  // Verification stamps — set by lib/claimVerification.ts's verifyClaim()
+  // gate for entities that went through it (evidence/outcome claims synced
+  // from a run); left null for entities that were never run through the
+  // gate (e.g. topics, methods, manually created notes).
+  status       String? // 'grounded' | 'unsupported' | 'contradicted' | 'unavailable'
+  method       String? // 'overlap' | 'nli' | 'llm_judge' | 'unavailable'
+  confidence   Float?
+  checkedAt    DateTime?
+  verifier     String? // identifies the verification pass, e.g. "verifyClaim/v1"
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -250,7 +277,12 @@ model GraphEdge {
   id        String   @id @default(cuid())
   fromId    String
   toId      String
-  type      String   // 'motivates' | 'provides' | 'uses_method' | 'contradicts' | 'reveals' | 'related_to' | 'notes_on'
+  // 'motivates' | 'supports' | 'uses_method' | 'contradicts' | 'reveals' |
+  // 'related_to' | 'notes_on' | 'tests' | 'uses_dataset' | 'derived_from' |
+  // 'transferred_from' | 'replicates'.
+  // #55/V3.0.2: 'supports' replaced 'provides' — evidence supports a
+  // hypothesis/topic, not the other way around (fromId is now the evidence).
+  type      String
   jobId     String?
   origin    String   @default("system")
   // #54/V3.0.1: no separate visibility field on edges — an edge is visible
@@ -259,6 +291,15 @@ model GraphEdge {
   // speeds up own-workspace write/delete checks) even though it's derivable
   // from the endpoints.
   workspaceId String  @default("default")
+  // #55/V3.0.2: same producer/verification stamps as GraphEntity, for edges
+  // created by the verifyClaim() gate ('supports'/'contradicts' edges) —
+  // null for edge types the gate doesn't touch (motivates, uses_method, …).
+  producer   String?
+  status     String?
+  method     String?
+  confidence Float?
+  checkedAt  DateTime?
+  verifier   String?
   createdAt DateTime @default(now())
 
   from      GraphEntity @relation("GraphEdgeFrom", fields: [fromId], references: [id], onDelete: Cascade)
@@ -275,7 +316,16 @@ model EntitySource {
   id        String   @id @default(cuid())
   entityId  String
   sourceId  String
+  // 'supporting' (default) | 'contradicting' — #55/V3.0.2: counter-evidence
+  // links now record that they contradict, instead of every link claiming
+  // to support.
   role      String   @default("supporting")
+  // Exact passage in the source this link is grounded on, when verifyClaim()
+  // found one — null for links created without going through the gate
+  // (e.g. a node's full source list before per-claim grounding existed).
+  start     Int?
+  end       Int?
+  text      String?  @db.Text
   createdAt DateTime @default(now())
 
   entity    GraphEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)

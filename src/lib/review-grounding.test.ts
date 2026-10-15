@@ -7,6 +7,7 @@ import {
   applySelfConsistency,
   groundReviewClaims,
   verifyReferences,
+  verifyInlineCitations,
   type GroundedReviewClaim,
 } from './review-grounding'
 
@@ -233,5 +234,39 @@ describe('verifyReferences', () => {
     expect(results).toHaveLength(1)
     expect(results[0].status).toBe('unresolved')
     expect(results[0].source).toBe('none')
+  })
+})
+
+describe('verifyInlineCitations', () => {
+  const originalFetch = global.fetch
+
+  afterEach(() => {
+    global.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  it('returns nothing when the text has no DOI, even with no References heading', async () => {
+    await expect(verifyInlineCitations('A short claim with no citation at all.')).resolves.toEqual([])
+  })
+
+  it('verifies an inline DOI without requiring a References section', async () => {
+    const text = 'This finding replicates the result reported in 10.1234/abcd.efgh.'
+    global.fetch = vi.fn(async (url: string | URL) => {
+      const href = String(url)
+      if (href.startsWith('https://doi.org/')) return { status: 200 } as Response
+      return { ok: true, json: async () => ({ results: [{ title: 'Match', doi: 'https://doi.org/10.1234/abcd.efgh' }] }) } as Response
+    }) as unknown as typeof fetch
+
+    const results = await verifyInlineCitations(text)
+    expect(results).toHaveLength(1)
+    expect(results[0].doi).toBe('10.1234/abcd.efgh')
+    expect(results[0].status).toBe('verified')
+  })
+
+  it('de-duplicates repeated DOIs in the same text', async () => {
+    const text = 'See 10.1234/abcd.efgh and again 10.1234/abcd.efgh.'
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ results: [] }) }) as unknown as typeof fetch
+    const results = await verifyInlineCitations(text)
+    expect(results).toHaveLength(1)
   })
 })

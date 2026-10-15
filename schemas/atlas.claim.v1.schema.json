@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas.schemas/atlas.claim.v1.schema.json",
+  "title": "atlas.claim",
+  "version": "1",
+  "description": "A single research claim as written into or read from Hypothesis Atlas's research graph — the shape #59/V3.0.6's POST /api/claims endpoint and MCP server accept and return. Published separately from the AGPL-licensed application code (see schemas/LICENSE) so other tools can read/write this shape without inheriting the AGPL.",
+  "type": "object",
+  "required": ["schemaVersion", "type", "label", "workspaceId", "producer"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "Version of this schema the record conforms to."
+    },
+    "id": {
+      "type": "string",
+      "description": "Server-assigned id once the claim has been written. Absent on submission."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["topic", "hypothesis", "method", "evidence", "gap", "note", "outcome", "dataset"],
+      "description": "What kind of record this claim is."
+    },
+    "label": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "The claim text itself, as a short statement."
+    },
+    "content": {
+      "type": ["string", "null"],
+      "maxLength": 4000,
+      "description": "Longer free-text elaboration, if any."
+    },
+    "domain": {
+      "type": ["string", "null"],
+      "description": "Coarse subject-area classification, e.g. \"biology\"."
+    },
+    "workspaceId": {
+      "type": "string",
+      "description": "The workspace this claim belongs to. Writes are always confined to the submitting agent's own workspace."
+    },
+    "producer": {
+      "type": "string",
+      "description": "Identity of whoever/whatever submitted this claim — a user id, 'research-agent' for an internal run, or an external agent's stated identity (#59)."
+    },
+    "supersedes": {
+      "type": ["string", "null"],
+      "description": "Id of an earlier claim this one supersedes, if any (e.g. a replication superseding a prior outcome)."
+    },
+    "sources": {
+      "type": "array",
+      "description": "Evidence this claim is checked against.",
+      "items": {
+        "type": "object",
+        "required": ["id", "text"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" }
+        }
+      }
+    },
+    "verification": {
+      "type": ["object", "null"],
+      "description": "Result of running this claim through the verifyClaim() gate (#55/V3.0.2). Null means the claim hasn't been checked.",
+      "properties": {
+        "status": { "type": "string", "enum": ["grounded", "unsupported", "contradicted", "unavailable"] },
+        "method": { "type": "string", "enum": ["overlap", "nli", "llm_judge", "unavailable"] },
+        "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "checkedAt": { "type": "string", "format": "date-time" },
+        "verifier": { "type": "string" },
+        "passages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["sourceId", "start", "end", "text"],
+            "properties": {
+              "sourceId": { "type": "string" },
+              "start": { "type": "integer" },
+              "end": { "type": "integer" },
+              "text": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

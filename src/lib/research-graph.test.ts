@@ -72,7 +72,7 @@ describe('syncJobGraph', () => {
         findingsJson: JSON.stringify(['Reduces accidents']),
         openProblemsJson: JSON.stringify([]),
         disagreementsJson: JSON.stringify([]),
-        nodeSources: [{ sourceId: 'src-1', role: 'supporting' }],
+        nodeSources: [{ sourceId: 'src-1', role: 'supporting', source: { title: 'Some paper', snippet: 'Reduces accidents in simulation.' } }],
       },
     ])
     prismaMock.graphEntity.findUnique.mockResolvedValue(null)
@@ -84,7 +84,7 @@ describe('syncJobGraph', () => {
     const result = await syncJobGraph('job-1')
 
     expect(result.entities).toBe(3) // topic + method + finding
-    expect(result.edges).toBe(2) // uses_method + provides
+    expect(result.edges).toBe(2) // uses_method + supports
     expect(prismaMock.graphEntity.create).toHaveBeenCalledTimes(3)
     expect(prismaMock.progressEvent.create).toHaveBeenCalled()
   })
@@ -123,6 +123,108 @@ describe('syncJobGraph', () => {
     expect(prismaMock.graphEntity.findUnique).toHaveBeenCalledWith({
       where: { workspaceId_syncKey: { workspaceId: 'user-1', syncKey: 'g:topic:topic' } },
     })
+  })
+
+  it('#55/V3.0.2: stamps synced entities and edges with the research-agent producer', async () => {
+    prismaMock.job.findUnique.mockResolvedValue({ id: 'job-1', topicQuery: 'topic', rootNodeId: 'node-1', userId: null })
+    prismaMock.node.findMany.mockResolvedValue([
+      { id: 'node-1', depth: 0, label: 'Topic', summary: 'Summary', methodsJson: JSON.stringify(['Simulation']), findingsJson: null, openProblemsJson: null, disagreementsJson: null, nodeSources: [] },
+    ])
+    prismaMock.graphEntity.findUnique.mockResolvedValue(null)
+    prismaMock.graphEntity.create.mockImplementation(async ({ data }: any) => ({ id: `entity-${data.label}`, ...data }))
+    prismaMock.graphEntity.findMany.mockResolvedValue([])
+
+    await syncJobGraph('job-1')
+
+    expect(prismaMock.graphEntity.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ producer: 'research-agent' }) })
+    )
+    expect(prismaMock.graphEdge.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ producer: 'research-agent' }) })
+    )
+  })
+
+  it("#55/V3.0.2: links a finding to its topic via 'supports' (evidence -> topic), not 'provides'", async () => {
+    prismaMock.job.findUnique.mockResolvedValue({ id: 'job-1', topicQuery: 'topic', rootNodeId: 'node-1', userId: null })
+    prismaMock.node.findMany.mockResolvedValue([
+      {
+        id: 'node-1',
+        depth: 0,
+        label: 'Topic',
+        summary: 'Summary',
+        methodsJson: null,
+        findingsJson: JSON.stringify(['Reduces accidents']),
+        openProblemsJson: null,
+        disagreementsJson: null,
+        nodeSources: [],
+      },
+    ])
+    prismaMock.graphEntity.findUnique.mockResolvedValue(null)
+    prismaMock.graphEntity.create.mockImplementation(async ({ data }: any) => ({ id: `entity-${data.label}`, ...data }))
+    prismaMock.graphEntity.findMany.mockResolvedValue([])
+
+    await syncJobGraph('job-1')
+
+    expect(prismaMock.graphEdge.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { fromId_toId_type: { fromId: 'entity-Reduces accidents', toId: 'entity-Topic', type: 'supports' } },
+      })
+    )
+  })
+
+  it('#55/V3.0.2: badges a finding with no linked sources as unsupported, but still writes it', async () => {
+    prismaMock.job.findUnique.mockResolvedValue({ id: 'job-1', topicQuery: 'topic', rootNodeId: 'node-1', userId: null })
+    prismaMock.node.findMany.mockResolvedValue([
+      {
+        id: 'node-1',
+        depth: 0,
+        label: 'Topic',
+        summary: 'Summary',
+        methodsJson: null,
+        findingsJson: JSON.stringify(['An unverifiable claim with nothing backing it']),
+        openProblemsJson: null,
+        disagreementsJson: null,
+        nodeSources: [],
+      },
+    ])
+    prismaMock.graphEntity.findUnique.mockResolvedValue(null)
+    prismaMock.graphEntity.create.mockImplementation(async ({ data }: any) => ({ id: `entity-${data.label}`, ...data }))
+    prismaMock.graphEntity.findMany.mockResolvedValue([])
+
+    const result = await syncJobGraph('job-1')
+
+    // Never dropped — the entity and its edge are still created.
+    expect(result.entities).toBe(2)
+    expect(prismaMock.graphEntity.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'unsupported', method: 'overlap' }) })
+    )
+  })
+
+  it("#55/V3.0.2: links a disagreement with role 'contradicting', not 'supporting'", async () => {
+    prismaMock.job.findUnique.mockResolvedValue({ id: 'job-1', topicQuery: 'topic', rootNodeId: 'node-1', userId: null })
+    prismaMock.node.findMany.mockResolvedValue([
+      {
+        id: 'node-1',
+        depth: 0,
+        label: 'Topic',
+        summary: 'Summary',
+        methodsJson: null,
+        findingsJson: null,
+        openProblemsJson: null,
+        disagreementsJson: JSON.stringify(['Some studies dispute this']),
+        nodeSources: [{ sourceId: 'src-1', role: 'supporting', source: { title: 'A paper', snippet: null } }],
+      },
+    ])
+    prismaMock.graphEntity.findUnique.mockResolvedValue(null)
+    prismaMock.graphEntity.create.mockImplementation(async ({ data }: any) => ({ id: `entity-${data.label}`, ...data }))
+    prismaMock.entitySource.upsert.mockResolvedValue({})
+    prismaMock.graphEntity.findMany.mockResolvedValue([])
+
+    await syncJobGraph('job-1')
+
+    expect(prismaMock.entitySource.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ role: 'contradicting' }) })
+    )
   })
 
   it('leaves an existing system-origin entity untouched when unchanged', async () => {
