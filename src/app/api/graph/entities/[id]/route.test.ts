@@ -54,6 +54,43 @@ describe('PATCH /api/graph/entities/[id]', () => {
     const res = await PATCH(patchReq({ label: 'New' }), { params: { id: 'e1' } })
     expect(res.status).toBe(200)
   })
+
+  it("#56/V3.0.3: one-click sharing — widens visibility via PATCH", async () => {
+    prismaMock.graphEntity.findUnique.mockResolvedValue({ id: 'e1', workspaceId: 'default', type: 'outcome', label: 'Outcome', origin: 'user' })
+    prismaMock.graphEntity.update.mockResolvedValue({ id: 'e1', visibility: 'shared' })
+    const res = await PATCH(patchReq({ visibility: 'shared' }), { params: { id: 'e1' } })
+    expect(res.status).toBe(200)
+    expect(prismaMock.graphEntity.update).toHaveBeenCalledWith({ where: { id: 'e1' }, data: { visibility: 'shared' } })
+  })
+
+  it('#56/V3.0.3: rejects an invalid visibility value', async () => {
+    prismaMock.graphEntity.findUnique.mockResolvedValue({ id: 'e1', workspaceId: 'default', type: 'outcome', label: 'Outcome', origin: 'user' })
+    const res = await PATCH(patchReq({ visibility: 'bogus' }), { params: { id: 'e1' } })
+    expect(res.status).toBe(400)
+    expect(prismaMock.graphEntity.update).not.toHaveBeenCalled()
+  })
+
+  it('#56/V3.0.3: abandons a hypothesis with a reason', async () => {
+    prismaMock.graphEntity.findUnique.mockResolvedValue({ id: 'h1', workspaceId: 'default', type: 'hypothesis', label: 'H', origin: 'system' })
+    prismaMock.graphEntity.update.mockResolvedValue({ id: 'h1', abandonedReason: 'team moved on' })
+    const res = await PATCH(patchReq({ abandonedReason: 'team moved on' }), { params: { id: 'h1' } })
+    expect(res.status).toBe(200)
+    expect(prismaMock.graphEntity.update).toHaveBeenCalledWith({ where: { id: 'h1' }, data: { abandonedReason: 'team moved on' } })
+  })
+
+  it('#56/V3.0.3: rejects an empty abandon reason', async () => {
+    prismaMock.graphEntity.findUnique.mockResolvedValue({ id: 'h1', workspaceId: 'default', type: 'hypothesis', label: 'H', origin: 'system' })
+    const res = await PATCH(patchReq({ abandonedReason: '   ' }), { params: { id: 'h1' } })
+    expect(res.status).toBe(400)
+  })
+
+  it('#56/V3.0.3: clears an abandon reason by setting it to null', async () => {
+    prismaMock.graphEntity.findUnique.mockResolvedValue({ id: 'h1', workspaceId: 'default', type: 'hypothesis', label: 'H', origin: 'system' })
+    prismaMock.graphEntity.update.mockResolvedValue({ id: 'h1', abandonedReason: null })
+    const res = await PATCH(patchReq({ abandonedReason: null }), { params: { id: 'h1' } })
+    expect(res.status).toBe(200)
+    expect(prismaMock.graphEntity.update).toHaveBeenCalledWith({ where: { id: 'h1' }, data: { abandonedReason: null } })
+  })
 })
 
 describe('DELETE /api/graph/entities/[id]', () => {

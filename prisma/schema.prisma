@@ -259,6 +259,11 @@ model GraphEntity {
   confidence   Float?
   checkedAt    DateTime?
   verifier     String? // identifies the verification pass, e.g. "verifyClaim/v1"
+  // #56/V3.0.3: presence (not a separate boolean) means this hypothesis was
+  // explicitly abandoned, overriding whatever lib/outcomes.ts would otherwise
+  // compute from its linked outcomes — "abandoned requires a reason".
+  // Meaningless for non-hypothesis entities.
+  abandonedReason String? @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

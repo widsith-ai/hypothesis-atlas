@@ -154,6 +154,12 @@ const NAV_ITEMS: { href: string; label: string; icon: string; iconClass: string 
     iconClass: "text-emerald-500",
   },
   {
+    href: "/graveyard",
+    label: "Graveyard",
+    icon: "M19 21V8a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H10a2 2 0 00-2 2v1H7a2 2 0 00-2 2v13h14zM9 9h6M9 13h6",
+    iconClass: "text-zinc-500",
+  },
+  {
     href: "/docs",
     label: "Docs",
     icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5H4v15h3.5c1.746 0 3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5H20v15h-3.5c-1.746 0-3.332.477-4.5 1.253",

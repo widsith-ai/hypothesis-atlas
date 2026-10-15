@@ -23,6 +23,10 @@ interface GraphEntity {
   origin: string;
   pinned: boolean;
   status?: string | null;
+  hypothesisStatus?: string | null;
+  knownFailureModes?: string[] | null;
+  visibility?: string | null;
+  abandonedReason?: string | null;
   createdAt: string;
   updatedAt: string;
   sources: GraphSource[];
@@ -64,6 +68,19 @@ const STATUS_BADGES: Record<string, { label: string; color: string }> = {
   contradicted: { label: "contradicted", color: "#b54a33" },
   unavailable: { label: "unverified", color: "#a39a89" },
 };
+
+// #56/V3.0.3: a hypothesis's derived lifecycle status (lib/outcomes.ts).
+const HYPOTHESIS_STATUS_BADGES: Record<string, { label: string; color: string }> = {
+  proposed: { label: "proposed", color: "#a39a89" },
+  grounded: { label: "grounded", color: "#4c777c" },
+  under_test: { label: "under test", color: "#a87732" },
+  supported: { label: "supported", color: "#567d5e" },
+  refuted: { label: "refuted", color: "#b54a33" },
+  inconclusive: { label: "inconclusive", color: "#76626b" },
+  abandoned: { label: "abandoned", color: "#6b6560" },
+};
+
+const OUTCOME_RESULT_OPTIONS = ["supported", "refuted", "inconclusive", "in_progress"];
 
 const EDGE_LABELS: Record<string, string> = {
   motivates: "motivates",
@@ -270,6 +287,15 @@ export default function ResearchGraphPage() {
   const [edgeTargetSearch, setEdgeTargetSearch] = useState("");
   const [newEdgeType, setNewEdgeType] = useState("related_to");
 
+  // #56/V3.0.3: negative-results outcome form state.
+  const [showOutcomeForm, setShowOutcomeForm] = useState(false);
+  const [outcomeResult, setOutcomeResult] = useState("refuted");
+  const [outcomeFailureMode, setOutcomeFailureMode] = useState("");
+  const [outcomeEffect, setOutcomeEffect] = useState("");
+  const [outcomeConditions, setOutcomeConditions] = useState("");
+  const [abandonReason, setAbandonReason] = useState("");
+  const [showAbandonForm, setShowAbandonForm] = useState(false);
+
   const svgRef = useRef<SVGSVGElement>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -310,6 +336,8 @@ export default function ResearchGraphPage() {
 
   useEffect(() => {
     setEditing(false);
+    setShowOutcomeForm(false);
+    setShowAbandonForm(false);
     if (selected) {
       setEditLabel(selected.label);
       setEditContent(selected.content ?? "");
@@ -486,6 +514,71 @@ export default function ResearchGraphPage() {
     }
   };
 
+  const handleRecordOutcome = async () => {
+    if (!selected || selected.type !== "hypothesis") return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/graph/outcomes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hypothesisId: selected.id,
+          result: outcomeResult,
+          failureMode: outcomeFailureMode.trim() || undefined,
+          effect: outcomeEffect.trim() || undefined,
+          conditions: outcomeConditions.trim() || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      setShowOutcomeForm(false);
+      setOutcomeFailureMode("");
+      setOutcomeEffect("");
+      setOutcomeConditions("");
+      await loadGraph();
+    } catch {
+      setError("Failed to record outcome.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSetVisibility = async (id: string, visibility: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/graph/entities/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visibility }),
+      });
+      if (!res.ok) throw new Error();
+      await loadGraph();
+    } catch {
+      setError("Failed to update sharing.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAbandon = async () => {
+    if (!selected || !abandonReason.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/graph/entities/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ abandonedReason: abandonReason.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      setShowAbandonForm(false);
+      setAbandonReason("");
+      await loadGraph();
+    } catch {
+      setError("Failed to abandon hypothesis.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleQuery = async () => {
     const q = queryText.trim();
     if (!q) return;
@@ -585,6 +678,7 @@ export default function ResearchGraphPage() {
             <Link href="/" className={`px-4 py-2 rounded-lg font-semibold transition-colors ${t.navButton}`}>Home</Link>
             <Link href="/jobs" className={`px-4 py-2 rounded-lg font-semibold transition-colors ${t.navButton}`}>My Research</Link>
             <Link href="/explore" className={`px-4 py-2 rounded-lg font-semibold transition-colors ${t.navButton}`}>Explore</Link>
+            <Link href="/graveyard" className={`px-4 py-2 rounded-lg font-semibold transition-colors ${t.navButton}`}>Graveyard</Link>
           </div>
         </div>
 
@@ -922,6 +1016,131 @@ export default function ResearchGraphPage() {
                         rows={5}
                         className={`w-full rounded-xl border px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-indigo-400 resize-none ${t.input}`}
                       />
+                    </div>
+                  )}
+
+                  {/* #56/V3.0.3: sharing — outcomes (and anything else) start private; one click widens read access. */}
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs ${t.subText}`}>Visibility:</span>
+                    {["private", "shared", "public"].map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => handleSetVisibility(selected.id, v)}
+                        disabled={saving || selected.visibility === v}
+                        className={`px-2 py-0.5 rounded-full text-xs border ${
+                          selected.visibility === v ? "font-semibold" : t.subText
+                        } ${t.navButton}`}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* #56/V3.0.3: hypothesis lifecycle — status badge, record-outcome form, abandon. */}
+                  {selected.type === "hypothesis" && (
+                    <div className={`rounded-xl border p-3 space-y-2 ${theme === "dark" ? "bg-zinc-800/60 border-zinc-700" : "bg-gray-50 border-gray-200"}`}>
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-bold uppercase tracking-wide ${t.subText}`}>Status</span>
+                        {selected.hypothesisStatus && HYPOTHESIS_STATUS_BADGES[selected.hypothesisStatus] && (
+                          <span
+                            className="text-xs font-semibold px-2 py-0.5 rounded-full text-white"
+                            style={{ background: HYPOTHESIS_STATUS_BADGES[selected.hypothesisStatus].color }}
+                          >
+                            {HYPOTHESIS_STATUS_BADGES[selected.hypothesisStatus].label}
+                          </span>
+                        )}
+                      </div>
+                      {selected.abandonedReason && (
+                        <p className={`text-xs italic ${t.subText}`}>Abandoned: {selected.abandonedReason}</p>
+                      )}
+
+                      {!showOutcomeForm ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setShowOutcomeForm(true)}
+                            className={`text-xs px-2 py-1 rounded-lg border ${t.navButton}`}
+                          >
+                            Record outcome
+                          </button>
+                          {!selected.abandonedReason && !showAbandonForm && (
+                            <button
+                              onClick={() => setShowAbandonForm(true)}
+                              className={`text-xs px-2 py-1 rounded-lg border ${t.navButton}`}
+                            >
+                              Abandon
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <select
+                            value={outcomeResult}
+                            onChange={(e) => setOutcomeResult(e.target.value)}
+                            className={`w-full rounded-lg border px-2 py-1 text-xs ${t.input}`}
+                          >
+                            {OUTCOME_RESULT_OPTIONS.map((r) => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                          <input
+                            value={outcomeFailureMode}
+                            onChange={(e) => setOutcomeFailureMode(e.target.value)}
+                            placeholder="Failure mode (if any)"
+                            className={`w-full rounded-lg border px-2 py-1 text-xs ${t.input}`}
+                          />
+                          <input
+                            value={outcomeEffect}
+                            onChange={(e) => setOutcomeEffect(e.target.value)}
+                            placeholder="Effect observed"
+                            className={`w-full rounded-lg border px-2 py-1 text-xs ${t.input}`}
+                          />
+                          <input
+                            value={outcomeConditions}
+                            onChange={(e) => setOutcomeConditions(e.target.value)}
+                            placeholder="Conditions"
+                            className={`w-full rounded-lg border px-2 py-1 text-xs ${t.input}`}
+                          />
+                          <div className="flex gap-2">
+                            <button onClick={handleRecordOutcome} disabled={saving} className="text-xs px-2 py-1 rounded-lg bg-indigo-600 text-white disabled:opacity-50">
+                              Save outcome
+                            </button>
+                            <button onClick={() => setShowOutcomeForm(false)} className={`text-xs px-2 py-1 rounded-lg border ${t.navButton}`}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {showAbandonForm && (
+                        <div className="space-y-1.5">
+                          <input
+                            value={abandonReason}
+                            onChange={(e) => setAbandonReason(e.target.value)}
+                            placeholder="Reason for abandoning"
+                            className={`w-full rounded-lg border px-2 py-1 text-xs ${t.input}`}
+                          />
+                          <div className="flex gap-2">
+                            <button onClick={handleAbandon} disabled={saving || !abandonReason.trim()} className="text-xs px-2 py-1 rounded-lg bg-red-600 text-white disabled:opacity-50">
+                              Confirm abandon
+                            </button>
+                            <button onClick={() => setShowAbandonForm(false)} className={`text-xs px-2 py-1 rounded-lg border ${t.navButton}`}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* #56/V3.0.3: a method's known failure modes, collected automatically from its hypotheses' refuted outcomes. */}
+                  {selected.type === "method" && selected.knownFailureModes && selected.knownFailureModes.length > 0 && (
+                    <div>
+                      <p className={`text-xs font-bold uppercase tracking-wide mb-1.5 ${t.subText}`}>Known failure modes</p>
+                      <ul className="space-y-1 list-disc list-inside">
+                        {selected.knownFailureModes.map((fm, i) => (
+                          <li key={i} className={`text-xs ${t.subText}`}>{fm}</li>
+                        ))}
+                      </ul>
                     </div>
                   )}
 
