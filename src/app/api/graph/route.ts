@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { syncJobGraph } from '@/lib/research-graph'
 import { resolveWorkspaceId, graphVisibilityWhere } from '@/lib/graphAccess'
+import { computeHypothesisStatuses, collectMethodFailureModes } from '@/lib/outcomes'
 
 // Source rows are per-job (papers get re-fetched per run), so the same paper
 // can be linked several times via different rows — collapse them by title.
@@ -81,6 +82,11 @@ export async function GET() {
       byType[e.type] = (byType[e.type] ?? 0) + 1
     }
 
+    // #56/V3.0.3: derived, not stored — a hypothesis's status from its
+    // outcomes, and a method's known failure modes from outcomes that
+    // refuted a hypothesis it was used on.
+    const hypothesisStatuses = computeHypothesisStatuses(entities, edges)
+
     return NextResponse.json({
       entities: entities.map((e) => ({
         id: e.id,
@@ -98,6 +104,10 @@ export async function GET() {
         confidence: e.confidence,
         checkedAt: e.checkedAt,
         verifier: e.verifier,
+        abandonedReason: e.abandonedReason,
+        hypothesisStatus: e.type === 'hypothesis' ? hypothesisStatuses.get(e.id) ?? null : null,
+        knownFailureModes: e.type === 'method' ? collectMethodFailureModes(e.id, entities, edges) : null,
+        visibility: e.visibility,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
         sources: dedupeSources(e.entitySources).map((es) => ({

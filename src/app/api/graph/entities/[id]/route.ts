@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { authOptions } from '@/lib/auth'
 import { isEntityType } from '@/lib/research-graph'
-import { resolveWorkspaceId, canWriteGraphItem } from '@/lib/graphAccess'
+import { resolveWorkspaceId, canWriteGraphItem, isGraphVisibility } from '@/lib/graphAccess'
 
 export async function PATCH(
   request: NextRequest,
@@ -11,7 +11,7 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json()
-    const { type, label, content, pinned } = body ?? {}
+    const { type, label, content, pinned, visibility, abandonedReason } = body ?? {}
 
     const existing = await prisma.graphEntity.findUnique({ where: { id: params.id } })
     if (!existing) {
@@ -50,6 +50,24 @@ export async function PATCH(
 
     if (pinned !== undefined && typeof pinned === 'boolean') {
       data.pinned = pinned
+    }
+
+    // #56/V3.0.3: "one-click sharing" — an entity (an outcome, in practice)
+    // starts private and can be widened to shared/public with a single PATCH.
+    if (visibility !== undefined) {
+      if (!isGraphVisibility(visibility)) {
+        return NextResponse.json({ error: 'Invalid visibility' }, { status: 400 })
+      }
+      data.visibility = visibility
+    }
+
+    // #56/V3.0.3: abandoning a hypothesis requires a reason; clearing it back
+    // to null un-abandons (lets the status go back to being outcome-derived).
+    if (abandonedReason !== undefined) {
+      if (abandonedReason !== null && (typeof abandonedReason !== 'string' || !abandonedReason.trim())) {
+        return NextResponse.json({ error: 'abandonedReason must be a non-empty string or null' }, { status: 400 })
+      }
+      data.abandonedReason = typeof abandonedReason === 'string' ? abandonedReason.trim().slice(0, 2000) : null
     }
 
     // Any semantic edit converts the entity to user-owned so re-syncs of the
