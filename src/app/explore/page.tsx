@@ -136,6 +136,12 @@ const BRAND_ICON =
 
 const NAV_ITEMS: { href: string; label: string; icon: string; iconClass: string }[] = [
   {
+    href: "/workspace",
+    label: "Workspace",
+    icon: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 4v-4z",
+    iconClass: "text-indigo-500",
+  },
+  {
     href: "/jobs",
     label: "My Research",
     icon: "M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z",
