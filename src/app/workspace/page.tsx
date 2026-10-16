@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import InkSeal from "@/components/ink/InkSeal";
+import AssistantChat from "@/components/AssistantChat";
 
 type Theme = "dark" | "light" | "vibrant";
 
-// #21/V4.1 — this page is the shell only: a 50/50 chat+sidebar layout, a nav
-// entry, and responsive stacking below desktop width. No chat logic and no
-// panel content yet — those are #22 (chat UI) and #23 (sidebar panel host).
-// Follow-up issues replace the two placeholder blocks below in place.
+// #21/V4.1 scaffolded this page; #22/V4.2 fills the left pane with a real
+// chat (job-agnostic — see /api/workspace/chat). The right pane (#23) is
+// still a placeholder.
 
 const THEME_STYLES = {
   dark: {
@@ -84,9 +84,19 @@ export default function WorkspacePage() {
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 px-6 pb-6">
         <section
           aria-label="Chat"
-          className={`w-full lg:w-1/2 min-h-[50vh] lg:min-h-0 rounded-2xl border ${t.paneBorder} ${t.paneBg} backdrop-blur-sm flex items-center justify-center`}
+          className={`w-full lg:w-1/2 min-h-[50vh] lg:min-h-0 rounded-2xl border ${t.paneBorder} overflow-hidden shadow-sm`}
         >
-          <p className={`text-sm ${t.placeholderText}`}>Chat pane — coming in #22</p>
+          <AssistantChat
+            jobId="workspace"
+            endpoint="/api/workspace/chat"
+            storageKey="assistant-chat:workspace"
+            enableNotes={false}
+            welcome={{
+              role: "assistant",
+              content:
+                "Hi! I'm Atlas. Ask me anything about your research, or open a run from My Research to dig into its graph, papers, and plan.",
+            }}
+          />
         </section>
 
         <section

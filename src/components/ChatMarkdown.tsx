@@ -62,7 +62,25 @@ type Block =
   | { type: "list"; items: string[] }
   | { type: "hr" }
   | { type: "paragraph"; lines: string[] }
-  | { type: "blockMath"; tex: string };
+  | { type: "blockMath"; tex: string }
+  | { type: "code"; lang: string | null; code: string };
+
+// #22/V4.2: fenced ```code``` blocks — Lean snippets and verification output
+// in the Experiments persona arrive this way. Split out before block-math
+// parsing so code containing a literal "$$" is never misread as TeX.
+function splitCodeFences(text: string): (string | { lang: string | null; code: string })[] {
+  const parts: (string | { lang: string | null; code: string })[] = []
+  const regex = /```(\w+)?\n?([\s\S]*?)```/g
+  let last = 0
+  let m: RegExpExecArray | null
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    parts.push({ lang: m[1] ?? null, code: m[2].replace(/\n$/, "") })
+    last = m.index + m[0].length
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
+}
 
 /** Splits text into $$block math$$ segments and everything in between, so block math isn't line-split by the block parser below. */
 function splitBlockMath(text: string): (string | { tex: string })[] {
@@ -130,14 +148,28 @@ function parseBlocks(segment: string): Block[] {
 
 function toBlocks(text: string): Block[] {
   const blocks: Block[] = [];
-  for (const part of splitBlockMath(text)) {
-    if (typeof part === "string") {
-      blocks.push(...parseBlocks(part));
-    } else {
-      blocks.push({ type: "blockMath", tex: part.tex });
+  for (const fence of splitCodeFences(text)) {
+    if (typeof fence !== "string") {
+      blocks.push({ type: "code", lang: fence.lang, code: fence.code });
+      continue;
+    }
+    for (const part of splitBlockMath(fence)) {
+      if (typeof part === "string") {
+        blocks.push(...parseBlocks(part));
+      } else {
+        blocks.push({ type: "blockMath", tex: part.tex });
+      }
     }
   }
   return blocks;
+}
+
+/** Whether a message's content contains "wide content" (block math or a fenced
+ * code block) that #22/V4.2 gives a dedicated, near-full-width block instead
+ * of cramming into a normal chat bubble — LaTeX claims, Lean snippets, and
+ * verification output need room a chat bubble doesn't give them. */
+export function hasWideContent(text: string): boolean {
+  return /\$\$[\s\S]+?\$\$/.test(text) || /```[\s\S]*?```/.test(text);
 }
 
 const HEADING_STYLE: Record<1 | 2 | 3, string> = {
@@ -148,9 +180,10 @@ const HEADING_STYLE: Record<1 | 2 | 3, string> = {
 
 /**
  * A small, purpose-built Markdown renderer for chat messages: headings,
- * **bold**, "- " bullet lists, "---" rules, and $inline$/$$block$$ math via
- * KaTeX — the subset this app's chat prompts actually produce (see
- * lib/boldIdeaAgents.ts and the experiment-persona prompt in
+ * **bold**, "- " bullet lists, "---" rules, $inline$/$$block$$ math via
+ * KaTeX, and ```fenced code``` blocks (#22/V4.2 — Lean snippets and
+ * verification output) — the subset this app's chat prompts actually
+ * produce (see lib/boldIdeaAgents.ts and the experiment-persona prompt in
  * /api/jobs/[id]/assistant-chat). Builds real React elements rather than
  * dangerouslySetInnerHTML-ing a general Markdown library's output, so a
  * chat message (including the user's own, typed free text) can't inject
@@ -193,6 +226,19 @@ export default function ChatMarkdown({ text, className }: ChatMarkdownProps) {
               <div key={key}>{`$$${block.tex}$$`}</div>
             );
           }
+          case "code":
+            return (
+              <div key={key} className="my-2 rounded-lg overflow-hidden border border-gray-700">
+                {block.lang && (
+                  <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wide bg-gray-800 text-gray-400">
+                    {block.lang}
+                  </div>
+                )}
+                <pre className="overflow-x-auto bg-gray-900 text-gray-100 text-xs p-3 m-0">
+                  <code>{block.code}</code>
+                </pre>
+              </div>
+            );
           case "paragraph":
           default:
             return block.lines.length > 0 ? (
