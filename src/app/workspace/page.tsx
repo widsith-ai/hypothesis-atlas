@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import InkSeal from "@/components/ink/InkSeal";
 import AssistantChat from "@/components/AssistantChat";
+import SidebarPanelHost from "@/components/SidebarPanelHost";
 
 type Theme = "dark" | "light" | "vibrant";
 
-// #21/V4.1 scaffolded this page; #22/V4.2 fills the left pane with a real
-// chat (job-agnostic — see /api/workspace/chat). The right pane (#23) is
-// still a placeholder.
+// #21/V4.1 scaffolded this page; #22/V4.2 filled the left pane with a real
+// chat (job-agnostic — see /api/workspace/chat); #23/V4.3 fills the right
+// pane with the switchable panel host (Research Graph / Experiments / Paper
+// Map / Notebook / Peer Review).
 
 const THEME_STYLES = {
   dark: {
@@ -101,9 +103,9 @@ export default function WorkspacePage() {
 
         <section
           aria-label="Panels"
-          className={`w-full lg:w-1/2 min-h-[50vh] lg:min-h-0 rounded-2xl border ${t.paneBorder} ${t.paneBg} backdrop-blur-sm flex items-center justify-center`}
+          className={`w-full lg:w-1/2 min-h-[50vh] lg:min-h-0 rounded-2xl border ${t.paneBorder} ${t.paneBg} backdrop-blur-sm overflow-hidden`}
         >
-          <p className={`text-sm ${t.placeholderText}`}>Research Graph / Experiments / Paper Map / Notebook / Review — coming in #23</p>
+          <SidebarPanelHost theme={theme} />
         </section>
       </div>
     </main>
