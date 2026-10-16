@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { appendNote } from "@/lib/notes";
-import ChatMarkdown from "./ChatMarkdown";
+import ChatMarkdown, { hasWideContent } from "./ChatMarkdown";
 
 interface Message {
   role: "user" | "assistant";
@@ -316,45 +316,53 @@ export default function AssistantChat({
 
       {/* Messages */}
       <div ref={messagesRef} onMouseUp={handleSelectionChange} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            {msg.role === "assistant" && (
-              <div className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center flex-shrink-0 mr-2 mt-0.5">
-                <span className="text-white text-xs font-bold">A</span>
-              </div>
-            )}
-            <div className="max-w-[80%]">
-              <div
-                className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-emerald-600 text-white rounded-tr-sm"
-                    : "bg-gray-100 text-gray-800 rounded-tl-sm"
-                }`}
-              >
-                <ChatMarkdown text={msg.content} />
-                {streaming && i === messages.length - 1 && msg.role === "assistant" && (
-                  <span className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 animate-pulse rounded-sm align-middle" />
-                )}
-              </div>
-              {enableNotes && msg.role === "assistant" && i > 0 && msg.content && !streaming && (
-                <div className="flex justify-end mt-1">
-                  <button
-                    onClick={() => handleSaveNote(i)}
-                    disabled={savedIds.has(i)}
-                    className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-emerald-600 disabled:text-emerald-500 disabled:cursor-default transition-colors"
-                    title="Save this reply to your notes"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                    </svg>
-                    {savedIds.has(i) ? "Saved to notes" : "Save to notes"}
-                  </button>
+        {messages.map((msg, i) => {
+          // #22/V4.2: a claim/proof/verification-result reply (block math or
+          // a fenced code block) gets a wide, dedicated content block instead
+          // of a cramped chat bubble — see ChatMarkdown's hasWideContent.
+          const wide = msg.role === "assistant" && hasWideContent(msg.content);
+          return (
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "assistant" && (
+                <div className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center flex-shrink-0 mr-2 mt-0.5">
+                  <span className="text-white text-xs font-bold">A</span>
                 </div>
               )}
+              <div className={wide ? "max-w-full flex-1 min-w-0" : "max-w-[80%]"}>
+                <div
+                  className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-emerald-600 text-white rounded-tr-sm"
+                      : wide
+                      ? "bg-white border border-gray-200 rounded-xl shadow-sm"
+                      : "bg-gray-100 text-gray-800 rounded-tl-sm"
+                  }`}
+                >
+                  <ChatMarkdown text={msg.content} />
+                  {streaming && i === messages.length - 1 && msg.role === "assistant" && (
+                    <span className="inline-block w-1.5 h-4 bg-emerald-400 ml-0.5 animate-pulse rounded-sm align-middle" />
+                  )}
+                </div>
+                {enableNotes && msg.role === "assistant" && i > 0 && msg.content && !streaming && (
+                  <div className="flex justify-end mt-1">
+                    <button
+                      onClick={() => handleSaveNote(i)}
+                      disabled={savedIds.has(i)}
+                      className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-emerald-600 disabled:text-emerald-500 disabled:cursor-default transition-colors"
+                      title="Save this reply to your notes"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                      </svg>
+                      {savedIds.has(i) ? "Saved to notes" : "Save to notes"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 
