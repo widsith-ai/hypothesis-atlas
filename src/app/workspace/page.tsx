@@ -13,9 +13,15 @@ type Theme = "dark" | "light" | "vibrant";
 // pane with the switchable panel host (Research Graph / Experiments / Paper
 // Map / Notebook / Peer Review).
 
+// Workspace deliberately skips the painted ink-wash landscape every other
+// page uses (`.ink-paper`/`.ink-night`/`.ink-jade`, see globals.css) — it's
+// a working surface the user looks at continuously, not a page meant to be
+// admired, so it keeps only `.ink-plain`'s subtle paper-fibre texture (the
+// same "no landscape" treatment globals.css already uses for the landing
+// page) with each theme's own background color layered on top.
 const THEME_STYLES = {
   dark: {
-    mainBg: "ink-night",
+    mainBg: "ink-plain bg-[#12100e]",
     text: "text-white",
     subText: "text-zinc-400",
     navBorder: "border-zinc-800",
@@ -25,7 +31,7 @@ const THEME_STYLES = {
     placeholderText: "text-zinc-500",
   },
   light: {
-    mainBg: "ink-paper",
+    mainBg: "ink-plain",
     text: "text-zinc-900",
     subText: "text-zinc-600",
     navBorder: "border-gray-200",
@@ -35,7 +41,7 @@ const THEME_STYLES = {
     placeholderText: "text-zinc-400",
   },
   vibrant: {
-    mainBg: "ink-jade",
+    mainBg: "ink-plain bg-[#f3efe2]",
     text: "text-zinc-900",
     subText: "text-zinc-600",
     navBorder: "border-teal-700/20",
