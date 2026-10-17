@@ -42,6 +42,7 @@ interface ResponseLetterEntry {
 interface ReviewResult {
   venue: { name: string; url: string | null; criteria: string[]; focus: string[] };
   agents: AgentReview[];
+  role?: "author" | "reviewer";
   disagreements?: Disagreement[];
   revisionRoadmap?: RevisionRoadmap;
   responseLetterSkeleton?: ResponseLetterEntry[];
@@ -133,6 +134,11 @@ export default function PaperReviewPanel() {
 
   const [venueId, setVenueId] = useState("mlconf");
   const [venueUrl, setVenueUrl] = useState("");
+  // Author: every deliverable, including the revision roadmap and response-
+  // letter drafts that coach you toward resubmission. Reviewer: just the
+  // reviews and decision letter, for comparing against your own read — you
+  // have no use for being told how to respond to your own comments.
+  const [role, setRole] = useState<"author" | "reviewer">("author");
   const [paperText, setPaperText] = useState("");
   const [source, setSource] = useState<"draft" | "upload">("draft");
   const [draftInfo, setDraftInfo] = useState<{ label: string; savedAt: number } | null>(null);
@@ -164,6 +170,7 @@ export default function PaperReviewPanel() {
           }
           if (typeof parsed.customName === "string") setCustomName(parsed.customName);
           if (typeof parsed.customPersona === "string") setCustomPersona(parsed.customPersona);
+          if (parsed.role === "author" || parsed.role === "reviewer") setRole(parsed.role);
         }
       }
       if (!hasCachedText) {
@@ -251,6 +258,7 @@ export default function PaperReviewPanel() {
           paperText,
           venueName,
           venueUrl: venueUrl.trim(),
+          role,
           customAgent:
             customName.trim() && customPersona.trim()
               ? { name: customName.trim(), persona: customPersona.trim() }
@@ -304,7 +312,7 @@ export default function PaperReviewPanel() {
             const { type: _type, ...data } = event;
             setResult(data as unknown as ReviewResult);
             try {
-              localStorage.setItem(cacheKey, JSON.stringify({ result: data, venueId, venueUrl, paperText, customName, customPersona }));
+              localStorage.setItem(cacheKey, JSON.stringify({ result: data, venueId, venueUrl, paperText, customName, customPersona, role }));
             } catch {}
             terminated = true;
           }
@@ -334,9 +342,34 @@ export default function PaperReviewPanel() {
           Choose a publisher — or paste its call-for-papers page so reviewers grade against its real criteria.
           A committee of three reviewer agents (plus your custom one and an adversarial Devil&apos;s Advocate pass) will review your paper and produce a final decision.
         </p>
-        <p className="text-xs text-gray-400 mb-5">
-          This is a pre-submission rehearsal — a simulated review to help you prepare, not a substitute for real reviewer feedback once you actually submit.
+        <p className="text-xs text-gray-400 mb-4">
+          {role === "author"
+            ? "This is a pre-submission rehearsal — a simulated review to help you prepare, not a substitute for real reviewer feedback once you actually submit."
+            : "This simulates an independent committee's take so you can compare it against your own review — not a substitute for your own judgment as the actual reviewer."}
         </p>
+
+        <div className="mb-5">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">I am the…</label>
+          <div className="inline-flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+            {(["author", "reviewer"] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setRole(r)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold capitalize transition-colors ${
+                  role === r ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-1.5">
+            {role === "author"
+              ? "You'll also get a prioritized revision roadmap and draft response-letter starting points."
+              : "Skips the revision roadmap and response-letter drafts — those coach an author, not useful for calibrating your own review."}
+          </p>
+        </div>
 
         {/* #83: "which skills we used, and what type of agent it has" — every
             reviewer below is a labeled LLM persona grounded in the paper's

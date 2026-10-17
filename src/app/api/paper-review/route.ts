@@ -267,6 +267,11 @@ export async function POST(request: NextRequest) {
   const custom = body?.customAgent as CustomAgentInput | null
   const reviewCountInput = Number(body?.reviewCount)
   const reviewCount = [3, 4, 5].includes(reviewCountInput) ? reviewCountInput : 3
+  // The author-coaching deliverables (revision roadmap, response-letter
+  // drafts) only make sense if you're the one who'll act on them. A
+  // reviewer comparing their own read against this simulated committee
+  // has no use for being told how to respond to their own comments.
+  const role = body?.role === 'reviewer' ? 'reviewer' : 'author'
 
   if (!sanitized.text || sanitized.text.length < 200) {
     return NextResponse.json({ error: 'Paper draft is too short to review after safety scrubbing (min 200 chars)' }, { status: 400 })
@@ -304,8 +309,12 @@ export async function POST(request: NextRequest) {
             { step: 'references', label: 'Checking references' },
             ...roster.map((agent) => ({ step: agent.id, label: `${agent.name} reviewing` })),
             { step: 'synthesis', label: "Writing the editor's meta-review and decision letter" },
-            { step: 'roadmap', label: 'Building the revision roadmap' },
-            { step: 'response-letter', label: 'Drafting response-letter starting points' },
+            ...(role === 'author'
+              ? [
+                  { step: 'roadmap', label: 'Building the revision roadmap' },
+                  { step: 'response-letter', label: 'Drafting response-letter starting points' },
+                ]
+              : []),
           ],
         })
 
@@ -432,59 +441,67 @@ Return ONLY JSON: {"decisionLetter":"..."}`
         const allClaims = available.flatMap((agent) => agent.claims ?? [])
         const nonRecurringClaimCount = allClaims.filter((claim) => claim.suspectedHallucination).length
 
-        // #80 task 3: turn the scattered per-reviewer weaknesses into one
-        // prioritized list — which are submission-blocking vs. nice-to-fix,
-        // in the order a time-constrained author should tackle them.
-        // Dedupes near-identical weaknesses raised by more than one
-        // reviewer rather than listing them once per reviewer.
-        emit({ type: 'progress', step: 'roadmap', status: 'started' })
-        const allWeaknesses = available.flatMap((agent) =>
-          (agent.weaknesses ?? []).map((text) => ({ text, reviewer: agent.name }))
-        )
+        // #80 task 3 / role selector: the revision roadmap and response-
+        // letter drafts (next block) coach an author into resubmitting —
+        // skipped entirely for the 'reviewer' role, which has no use for
+        // being told how to respond to its own comments, and whose "plan"
+        // event above never listed these two steps in the first place.
         let revisionRoadmap = { blocking: [] as string[], niceToFix: [] as string[] }
-        if (allWeaknesses.length > 0) {
-          const roadmapPrompt = `Below are the weaknesses raised across ${available.length} peer reviews of the same paper draft (some may be near-duplicates raised by more than one reviewer):
+        let responseLetterSkeleton: { comment: string; draftResponse: string }[] = []
+        if (role === 'author') {
+          // #80 task 3: turn the scattered per-reviewer weaknesses into one
+          // prioritized list — which are submission-blocking vs.
+          // nice-to-fix, in the order a time-constrained author should
+          // tackle them. Dedupes near-identical weaknesses raised by more
+          // than one reviewer rather than listing them once per reviewer.
+          emit({ type: 'progress', step: 'roadmap', status: 'started' })
+          const allWeaknesses = available.flatMap((agent) =>
+            (agent.weaknesses ?? []).map((text) => ({ text, reviewer: agent.name }))
+          )
+          if (allWeaknesses.length > 0) {
+            const roadmapPrompt = `Below are the weaknesses raised across ${available.length} peer reviews of the same paper draft (some may be near-duplicates raised by more than one reviewer):
 
 ${JSON.stringify(allWeaknesses)}
 
 Produce a prioritized revision roadmap for the author. Merge near-duplicate weaknesses into one entry. Mark an entry "blocking" only if it would plausibly justify a reject/major-revision on its own if left unaddressed; everything else is non-blocking ("nice to fix"). Order each list from most to least urgent.
 
 Return ONLY JSON: {"items":[{"issue":"one specific, actionable revision item","blocking":true}]}`
-          const roadmapResult = await askGroq(
-            roadmapPrompt,
-            'You are helping an author triage peer-review feedback before resubmission. Respond with valid JSON only.',
-            1800
-          )
-          revisionRoadmap = sortRevisionRoadmap(parseRevisionRoadmap(roadmapResult?.items))
-        }
-        emit({ type: 'progress', step: 'roadmap', status: 'completed' })
+            const roadmapResult = await askGroq(
+              roadmapPrompt,
+              'You are helping an author triage peer-review feedback before resubmission. Respond with valid JSON only.',
+              1800
+            )
+            revisionRoadmap = sortRevisionRoadmap(parseRevisionRoadmap(roadmapResult?.items))
+          }
+          emit({ type: 'progress', step: 'roadmap', status: 'completed' })
 
-        // #80 task 4: a drafting aid, not a finished rebuttal — a starting
-        // point for how the author could respond to each blocking (or, if
-        // there are none, top) comment: point to existing evidence,
-        // propose an additional experiment, or concede and soften the
-        // claim. Explicitly a pre-submission rehearsal tool (task 5) —
-        // real reviewer comments come later and are a different, real
-        // thing this does not pretend to replace.
-        emit({ type: 'progress', step: 'response-letter', status: 'started' })
-        const commentsToAddress = (revisionRoadmap.blocking.length > 0 ? revisionRoadmap.blocking : revisionRoadmap.niceToFix).slice(0, 6)
-        let responseLetterSkeleton: { comment: string; draftResponse: string }[] = []
-        if (commentsToAddress.length > 0) {
-          const responsePrompt = `An author is preparing to resubmit a paper after a simulated peer review. Here are the most important comments to address:
+          // #80 task 4: a drafting aid, not a finished rebuttal — a
+          // starting point for how the author could respond to each
+          // blocking (or, if there are none, top) comment: point to
+          // existing evidence, propose an additional experiment, or
+          // concede and soften the claim. Explicitly a pre-submission
+          // rehearsal tool (task 5) — real reviewer comments come later
+          // and are a different, real thing this does not pretend to
+          // replace.
+          emit({ type: 'progress', step: 'response-letter', status: 'started' })
+          const commentsToAddress = (revisionRoadmap.blocking.length > 0 ? revisionRoadmap.blocking : revisionRoadmap.niceToFix).slice(0, 6)
+          if (commentsToAddress.length > 0) {
+            const responsePrompt = `An author is preparing to resubmit a paper after a simulated peer review. Here are the most important comments to address:
 
 ${JSON.stringify(commentsToAddress)}
 
 For each comment, draft a short starting point (2-3 sentences) for how the author could respond in a response letter — e.g. pointing to evidence already in the paper, proposing a concrete additional experiment or analysis, or conceding the point and softening the related claim. These are drafting aids for the author to edit, not finished text, and must not fabricate results, data, or experiments that do not exist.
 
 Return ONLY JSON: {"items":[{"comment":"the review comment, verbatim or trimmed","draftResponse":"the drafted starting point"}]}`
-          const responseResult = await askGroq(
-            responsePrompt,
-            'You help authors draft response letters to peer review. Never invent results or experiments. Respond with valid JSON only.',
-            2200
-          )
-          responseLetterSkeleton = parseResponseLetter(responseResult?.items)
+            const responseResult = await askGroq(
+              responsePrompt,
+              'You help authors draft response letters to peer review. Never invent results or experiments. Respond with valid JSON only.',
+              2200
+            )
+            responseLetterSkeleton = parseResponseLetter(responseResult?.items)
+          }
+          emit({ type: 'progress', step: 'response-letter', status: 'completed' })
         }
-        emit({ type: 'progress', step: 'response-letter', status: 'completed' })
 
         const references = await referencesPromise
         emit({ type: 'progress', step: 'references', status: 'completed' })
@@ -492,6 +509,7 @@ Return ONLY JSON: {"items":[{"comment":"the review comment, verbatim or trimmed"
         emit({
           type: 'result',
           schemaVersion: 3,
+          role,
           document: {
             reviewedCharacters: document.text.length,
             sanitization: {
