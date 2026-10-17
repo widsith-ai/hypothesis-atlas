@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { extractAtlasPlanDraft, extractLegacyArsDraft, pickNewestDraft, type DraftCandidate, type DraftInfo } from "@/lib/paperDraftMigration";
+import { DEVILS_ADVOCATE_AGENT } from "@/lib/reviewRehearsal";
 
 interface ReviewScores {
   novelty: number;
@@ -476,7 +477,7 @@ export default function PaperReviewPanel() {
           {/* Per-agent reviews */}
           {result.agents.map((agent, idx) => {
             const hue = AGENT_HUES[idx % AGENT_HUES.length];
-            const isDevilsAdvocate = agent.id === "devils-advocate";
+            const isDevilsAdvocate = agent.id === DEVILS_ADVOCATE_AGENT.id;
             return (
               <div
                 key={agent.id}

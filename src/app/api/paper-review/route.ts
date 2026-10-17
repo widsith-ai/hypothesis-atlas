@@ -334,7 +334,20 @@ export async function POST(request: NextRequest) {
   for (const agent of roster) {
     generated.push(await reviewAsAgent({ agent, document, venueName, venueCriteria, venueFocus }))
   }
-  const agents = applySelfConsistency(generated)
+  // #80 code review: applySelfConsistency flags a claim no other reviewer
+  // corroborates as `suspectedHallucination` — correct for the balanced
+  // preset lenses, but the Devil's Advocate is deliberately prompted to
+  // surface "the single most damaging flaw" the others would not raise the
+  // same way. Without this, its most valuable finding would be the one
+  // most likely to get auto-flagged as a probable hallucination, purely
+  // for doing its job. It can still corroborate (or be corroborated by)
+  // other reviewers' claims — only its own claims' hallucination flag is
+  // cleared.
+  const agents = applySelfConsistency(generated).map((agent) =>
+    agent.id === DEVILS_ADVOCATE_AGENT.id
+      ? { ...agent, claims: agent.claims?.map((claim) => ({ ...claim, suspectedHallucination: false })) }
+      : agent
+  )
   const available = agents.filter((agent) => !agent.unavailable && agent.scores)
   if (available.length === 0) {
     return NextResponse.json(
@@ -380,11 +393,6 @@ Aggregate scores (1-10 averages): novelty ${finalScores.novelty}, soundness ${fi
 Write the meta-review an editor would send the authors: 3-5 sentences weighing where the reviewers agree, the single most important thing to fix before resubmission, and the final decision context. Be specific, not boilerplate.
 
 Return ONLY JSON: {"metaReview":"..."}`
-  const meta = await askGroq(metaPrompt, 'You are a senior editor writing a meta-review. Respond with valid JSON only.', 900)
-  const metaReview =
-    meta && typeof meta.metaReview === 'string' && meta.metaReview.trim()
-      ? meta.metaReview.trim().slice(0, 1200)
-      : `${available.length} reviewers reached consensus: ${consensus}. Overall score ${finalScores.overall}/10. Address the shared weaknesses above before resubmission.`
 
   // #80 task 2: the actual decision letter a chair/editor would send, not
   // just the terse internal meta-review above — states the decision
@@ -400,11 +408,19 @@ ${disagreements.length > 0 ? `Reviewers disagreed on: ${disagreements.map((d) =>
 Write the actual decision letter the authors would receive: a brief salutation, the decision stated plainly in the first sentence, 2-4 sentences of reasoning that reference the specific points above (including the disagreement, if any, rather than hiding it behind an average), and a short closing sentence. Address the authors directly ("Dear Authors," / "We have reached a decision..."). This is a simulated pre-submission rehearsal, not a real decision — write it exactly as the real letter would read, but do not claim to be affiliated with ${venueName} itself.
 
 Return ONLY JSON: {"decisionLetter":"..."}`
-  const decisionLetterResult = await askGroq(
-    decisionLetterPrompt,
-    'You are a senior editor writing a formal decision letter. Respond with valid JSON only.',
-    900
-  )
+
+  // #80 code review: these two calls don't depend on each other — running
+  // them sequentially (as originally written) stacked extra latency onto
+  // an already-sequential reviewer-roster loop, inside the route's 60s
+  // maxDuration. Promise.all lets them run concurrently instead.
+  const [meta, decisionLetterResult] = await Promise.all([
+    askGroq(metaPrompt, 'You are a senior editor writing a meta-review. Respond with valid JSON only.', 900),
+    askGroq(decisionLetterPrompt, 'You are a senior editor writing a formal decision letter. Respond with valid JSON only.', 900),
+  ])
+  const metaReview =
+    meta && typeof meta.metaReview === 'string' && meta.metaReview.trim()
+      ? meta.metaReview.trim().slice(0, 1200)
+      : `${available.length} reviewers reached consensus: ${consensus}. Overall score ${finalScores.overall}/10. Address the shared weaknesses above before resubmission.`
   const decisionLetter =
     decisionLetterResult && typeof decisionLetterResult.decisionLetter === 'string' && decisionLetterResult.decisionLetter.trim()
       ? decisionLetterResult.decisionLetter.trim().slice(0, 1800)
