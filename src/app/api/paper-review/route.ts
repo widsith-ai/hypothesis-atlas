@@ -16,6 +16,7 @@ import {
   type ReviewClaimInput,
 } from '@/lib/review-grounding'
 import {
+  PRESET_AGENTS,
   DEVILS_ADVOCATE_AGENT,
   findDisagreements,
   parseRevisionRoadmap,
@@ -52,42 +53,6 @@ interface AgentReview {
   scores?: ReviewScores
   recommendation?: string
 }
-
-// #63 (V3.0.0.1): role names, not invented people — a made-up name with a
-// title ("Prof. Elena Marsh") can read as a real expert's verdict. These are
-// labeled review lenses, not personas standing in for actual reviewers.
-const PRESET_AGENTS = [
-  {
-    id: 'methodologist',
-    name: 'Methodology & Novelty Reviewer',
-    persona:
-      'Reviews with 15 years of top-tier program-committee experience. Skeptical of incremental work; scrutinizes whether the claimed contribution is genuinely novel versus repackaged prior art. Reads the method description line by line and flags logical gaps, missing baselines, and unsupported assumptions.',
-  },
-  {
-    id: 'committee',
-    name: 'Venue Fit & Impact Reviewer',
-    persona:
-      'Reviews as a program committee member and journal associate editor would. Evaluates whether the paper matters to this venue\'s specific audience, whether the positioning and related-work coverage are fair, and whether the claims match the evidence. Writes balanced reviews but is decisive about rejections that waste reviewer time.',
-  },
-  {
-    id: 'rigor',
-    name: 'Statistical Rigor & Reproducibility Reviewer',
-    persona:
-      'Reviews with a background in experimental design. Checks statistical validity, sample sizes, error bars, ablation coverage, dataset choices, and whether the experiments could be reproduced from the paper alone. Unforgiving about overclaimed results and missing negative results.',
-  },
-  {
-    id: 'literature',
-    name: 'Related Work & Claims Reviewer',
-    persona:
-      'Reviews meticulously for honesty: checks whether the paper positions its contribution honestly, distinguishes evidence from speculation, and makes claims at the right level of scope. Calls out missing comparisons and citations that do not support the surrounding argument.',
-  },
-  {
-    id: 'clarity',
-    name: 'Clarity & Reproducibility Reviewer',
-    persona:
-      'Reviews for whether another research group could understand, reproduce, and build on the work. Traces definitions, datasets, implementation details, and stated limitations, and turns ambiguities into concrete questions for the authors.',
-  },
-]
 
 const RECOMMENDATIONS = ['accept', 'minor revision', 'major revision', 'reject']
 const CLAIM_CATEGORIES: ClaimCategory[] = ['strength', 'weakness', 'question']
@@ -323,6 +288,7 @@ export async function POST(request: NextRequest) {
       id: 'custom',
       name: customName,
       persona: `${customPersona} Review the paper in character, consistent with this description.`,
+      focus: customPersona,
     }
   }
   // #80 task 1: a distinct adversarial pass runs in addition to the roster
