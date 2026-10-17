@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { extractAtlasPlanDraft, extractLegacyArsDraft, pickNewestDraft, type DraftCandidate, type DraftInfo } from "@/lib/paperDraftMigration";
-import { DEVILS_ADVOCATE_AGENT } from "@/lib/reviewRehearsal";
+import { PRESET_AGENTS, DEVILS_ADVOCATE_AGENT } from "@/lib/reviewRehearsal";
 
 interface ReviewScores {
   novelty: number;
@@ -337,6 +337,32 @@ export default function PaperReviewPanel() {
         <p className="text-xs text-gray-400 mb-5">
           This is a pre-submission rehearsal — a simulated review to help you prepare, not a substitute for real reviewer feedback once you actually submit.
         </p>
+
+        {/* #83: "which skills we used, and what type of agent it has" — every
+            reviewer below is a labeled LLM persona grounded in the paper's
+            actual text, not a real person (see #63). Descriptions come from
+            lib/reviewRehearsal.ts, the same source the prompts themselves
+            use, so this can't drift out of sync with what actually ran. */}
+        <details className="mb-5 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3">
+          <summary className="text-xs font-semibold text-gray-600 cursor-pointer select-none">
+            Which reviewers ran, and what each one looks for
+          </summary>
+          <p className="text-xs text-gray-400 mt-2 mb-3">
+            Every reviewer is a simulated LLM persona grounded in the paper&apos;s actual text — not a real person. The first few lenses below run on every review (how many depends on the reviewer count), plus an adversarial Devil&apos;s Advocate pass that always runs in addition, and your custom reviewer if you add one.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {PRESET_AGENTS.map((a) => (
+              <div key={a.id} className="text-xs rounded-lg border border-gray-200 bg-white p-2.5">
+                <p className="font-semibold text-gray-700">{a.name}</p>
+                <p className="text-gray-500 mt-0.5">{a.focus}</p>
+              </div>
+            ))}
+            <div className="text-xs rounded-lg border border-red-200 bg-red-50/50 p-2.5">
+              <p className="font-semibold text-red-700">{DEVILS_ADVOCATE_AGENT.name}</p>
+              <p className="text-red-600/80 mt-0.5">{DEVILS_ADVOCATE_AGENT.focus}</p>
+            </div>
+          </div>
+        </details>
 
         <div className="grid md:grid-cols-2 gap-4 mb-4">
           <div>
