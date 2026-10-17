@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { extractAtlasPlanDraft, extractLegacyArsDraft, pickNewestDraft, type DraftCandidate, type DraftInfo } from "@/lib/paperDraftMigration";
-import { DEVILS_ADVOCATE_AGENT } from "@/lib/reviewRehearsal";
+import { PRESET_AGENTS, DEVILS_ADVOCATE_AGENT } from "@/lib/reviewRehearsal";
 
 interface ReviewScores {
   novelty: number;
@@ -47,6 +47,19 @@ interface ReviewResult {
   responseLetterSkeleton?: ResponseLetterEntry[];
   final: { scores: ReviewScores; consensus: string; metaReview: string; decisionLetter?: string; reviewerCount: number };
 }
+
+// #83: mirrors the stream events /api/paper-review emits.
+interface ProgressStep {
+  step: string;
+  label: string;
+  status: "pending" | "active" | "done";
+}
+
+type ReviewStreamEvent =
+  | { type: "plan"; steps: { step: string; label: string }[] }
+  | { type: "progress"; step: string; status: "started" | "completed" }
+  | { type: "error"; error: string }
+  | { type: "result"; [key: string]: unknown };
 
 const PRESET_VENUES = [
   { id: "nature", name: "Nature / Nature Portfolio journal" },
@@ -130,6 +143,9 @@ export default function PaperReviewPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReviewResult | null>(null);
+  // #83: live progress through a review run, driven by /api/paper-review's
+  // streamed plan/progress events — see runReview().
+  const [progressSteps, setProgressSteps] = useState<ProgressStep[]>([]);
 
   // Restore cached review on mount (avoids re-running on refresh); otherwise default to the current draft
   useEffect(() => {
@@ -226,6 +242,7 @@ export default function PaperReviewPanel() {
     }
     setLoading(true);
     setError(null);
+    setProgressSteps([]);
     try {
       const res = await fetch(`/api/paper-review`, {
         method: "POST",
@@ -240,15 +257,60 @@ export default function PaperReviewPanel() {
               : null,
         }),
       });
-      const data = await res.json();
+
+      // #83: pre-flight validation failures (missing API key, bad body,
+      // bad venue URL) still come back as a single plain JSON error with a
+      // real HTTP status — only a successful request streams.
       if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         setError(data.error ?? "Review failed");
         return;
       }
-      setResult(data);
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify({ result: data, venueId, venueUrl, paperText, customName, customPersona }));
-      } catch {}
+      if (!res.body) {
+        setError("Review failed — no response stream.");
+        return;
+      }
+
+      let terminated = false;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+          if (!line) continue;
+          let event: ReviewStreamEvent;
+          try {
+            event = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (event.type === "plan") {
+            setProgressSteps(event.steps.map((s) => ({ ...s, status: "pending" as const })));
+          } else if (event.type === "progress") {
+            setProgressSteps((prev) =>
+              prev.map((s) => (s.step === event.step ? { ...s, status: event.status === "started" ? "active" : "done" } : s))
+            );
+          } else if (event.type === "error") {
+            setError(event.error);
+            terminated = true;
+          } else if (event.type === "result") {
+            const { type: _type, ...data } = event;
+            setResult(data as unknown as ReviewResult);
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify({ result: data, venueId, venueUrl, paperText, customName, customPersona }));
+            } catch {}
+            terminated = true;
+          }
+        }
+      }
+      if (!terminated) setError("The review stream ended unexpectedly. Please try again.");
     } catch {
       setError("Network error while running the review");
     } finally {
@@ -275,6 +337,32 @@ export default function PaperReviewPanel() {
         <p className="text-xs text-gray-400 mb-5">
           This is a pre-submission rehearsal — a simulated review to help you prepare, not a substitute for real reviewer feedback once you actually submit.
         </p>
+
+        {/* #83: "which skills we used, and what type of agent it has" — every
+            reviewer below is a labeled LLM persona grounded in the paper's
+            actual text, not a real person (see #63). Descriptions come from
+            lib/reviewRehearsal.ts, the same source the prompts themselves
+            use, so this can't drift out of sync with what actually ran. */}
+        <details className="mb-5 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3">
+          <summary className="text-xs font-semibold text-gray-600 cursor-pointer select-none">
+            Which reviewers ran, and what each one looks for
+          </summary>
+          <p className="text-xs text-gray-400 mt-2 mb-3">
+            Every reviewer is a simulated LLM persona grounded in the paper&apos;s actual text — not a real person. The first few lenses below run on every review (how many depends on the reviewer count), plus an adversarial Devil&apos;s Advocate pass that always runs in addition, and your custom reviewer if you add one.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {PRESET_AGENTS.map((a) => (
+              <div key={a.id} className="text-xs rounded-lg border border-gray-200 bg-white p-2.5">
+                <p className="font-semibold text-gray-700">{a.name}</p>
+                <p className="text-gray-500 mt-0.5">{a.focus}</p>
+              </div>
+            ))}
+            <div className="text-xs rounded-lg border border-red-200 bg-red-50/50 p-2.5">
+              <p className="font-semibold text-red-700">{DEVILS_ADVOCATE_AGENT.name}</p>
+              <p className="text-red-600/80 mt-0.5">{DEVILS_ADVOCATE_AGENT.focus}</p>
+            </div>
+          </div>
+        </details>
 
         <div className="grid md:grid-cols-2 gap-4 mb-4">
           <div>
@@ -384,7 +472,7 @@ export default function PaperReviewPanel() {
             className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white shadow transition-opacity hover:opacity-90 disabled:opacity-50"
             style={{ background: "linear-gradient(to right, #455c68, #5f4e56)" }}
           >
-            {loading ? "Reviewers reading… (30–90s)" : result ? "Re-run Review" : "Start Review"}
+            {loading ? "Running review…" : result ? "Re-run Review" : "Start Review"}
           </button>
           {result && (
             <button onClick={clearReview} className="text-sm text-gray-400 hover:text-red-500 transition-colors">
@@ -392,6 +480,37 @@ export default function PaperReviewPanel() {
             </button>
           )}
         </div>
+
+        {/* #83: live progress — a determinate bar (the plan event tells us
+            the total step count up front) plus the step-by-step checklist,
+            so "what's going on" is visible instead of a static "(30-90s)". */}
+        {loading && progressSteps.length > 0 && (
+          <div className="mt-5">
+            <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500 ease-out"
+                style={{
+                  width: `${Math.round((progressSteps.filter((s) => s.status === "done").length / progressSteps.length) * 100)}%`,
+                  background: "linear-gradient(to right, #455c68, #5f4e56)",
+                }}
+              />
+            </div>
+            <ul className="mt-3 space-y-1.5">
+              {progressSteps.map((s) => (
+                <li key={s.step} className="flex items-center gap-2 text-xs">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      s.status === "done" ? "bg-emerald-500" : s.status === "active" ? "bg-indigo-500 animate-pulse" : "bg-gray-200"
+                    }`}
+                  />
+                  <span className={s.status === "pending" ? "text-gray-400" : s.status === "active" ? "text-gray-800 font-medium" : "text-gray-400 line-through"}>
+                    {s.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* Results */}

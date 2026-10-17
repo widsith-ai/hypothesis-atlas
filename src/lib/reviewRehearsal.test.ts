@@ -4,6 +4,7 @@ import {
   parseRevisionRoadmap,
   sortRevisionRoadmap,
   parseResponseLetter,
+  PRESET_AGENTS,
   DEVILS_ADVOCATE_AGENT,
 } from './reviewRehearsal'
 
@@ -11,6 +12,29 @@ describe('DEVILS_ADVOCATE_AGENT', () => {
   it('has a distinct id and a persona describing an adversarial, not balanced, review', () => {
     expect(DEVILS_ADVOCATE_AGENT.id).toBe('devils-advocate')
     expect(DEVILS_ADVOCATE_AGENT.persona.toLowerCase()).toContain('adversarial')
+  })
+
+  it('has a non-empty human-facing focus summary, distinct from the prompt persona', () => {
+    expect(DEVILS_ADVOCATE_AGENT.focus.length).toBeGreaterThan(0)
+    expect(DEVILS_ADVOCATE_AGENT.focus).not.toBe(DEVILS_ADVOCATE_AGENT.persona)
+  })
+})
+
+describe('PRESET_AGENTS', () => {
+  it('every preset has a non-empty id, name, persona, and focus', () => {
+    for (const agent of PRESET_AGENTS) {
+      expect(agent.id.length).toBeGreaterThan(0)
+      expect(agent.name.length).toBeGreaterThan(0)
+      expect(agent.persona.length).toBeGreaterThan(0)
+      expect(agent.focus.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('has unique ids, and none collide with the Devil\'s Advocate or the "custom" slot', () => {
+    const ids = PRESET_AGENTS.map((a) => a.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids).not.toContain(DEVILS_ADVOCATE_AGENT.id)
+    expect(ids).not.toContain('custom')
   })
 })
 

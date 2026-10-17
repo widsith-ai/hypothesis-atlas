@@ -1,19 +1,73 @@
 // #80 — pre-submission review rehearsal. Pure helpers for the parts of the
-// rehearsal pipeline that don't need an LLM call themselves: the adversarial
-// reviewer's persona, reconciling where reviewers disagree, and validating
-// the structured output of the revision-roadmap/response-letter LLM calls
-// (both live in src/app/api/paper-review/route.ts, which does the actual
-// Groq calls — kept thin here so this logic is unit-testable without one).
+// rehearsal pipeline that don't need an LLM call themselves: the reviewer
+// roster, reconciling where reviewers disagree, and validating the
+// structured output of the revision-roadmap/response-letter LLM calls (the
+// actual Groq calls live in src/app/api/paper-review/route.ts — kept thin
+// here so this logic is unit-testable without one).
+
+export interface ReviewerAgentDef {
+  id: string
+  name: string
+  // The full prompt-facing description — what the LLM is told to embody.
+  persona: string
+  // #83: a short, human-facing summary of the same thing, for the "which
+  // reviewers did this, and what were they looking for" explainer in the
+  // UI — separate from `persona` so that text can stay prompt-engineering
+  // verbose without becoming unreadable as UI copy.
+  focus: string
+}
+
+// #63 (V3.0.0.1): role names, not invented people — a made-up name with a
+// title ("Prof. Elena Marsh") can read as a real expert's verdict. These are
+// labeled review lenses, not personas standing in for actual reviewers.
+export const PRESET_AGENTS: ReviewerAgentDef[] = [
+  {
+    id: 'methodologist',
+    name: 'Methodology & Novelty Reviewer',
+    persona:
+      'Reviews with 15 years of top-tier program-committee experience. Skeptical of incremental work; scrutinizes whether the claimed contribution is genuinely novel versus repackaged prior art. Reads the method description line by line and flags logical gaps, missing baselines, and unsupported assumptions.',
+    focus: 'Whether the contribution is genuinely novel, and whether the method holds up to line-by-line scrutiny.',
+  },
+  {
+    id: 'committee',
+    name: 'Venue Fit & Impact Reviewer',
+    persona:
+      'Reviews as a program committee member and journal associate editor would. Evaluates whether the paper matters to this venue\'s specific audience, whether the positioning and related-work coverage are fair, and whether the claims match the evidence. Writes balanced reviews but is decisive about rejections that waste reviewer time.',
+    focus: "Fit for this venue's audience, and whether the claims actually match the evidence.",
+  },
+  {
+    id: 'rigor',
+    name: 'Statistical Rigor & Reproducibility Reviewer',
+    persona:
+      'Reviews with a background in experimental design. Checks statistical validity, sample sizes, error bars, ablation coverage, dataset choices, and whether the experiments could be reproduced from the paper alone. Unforgiving about overclaimed results and missing negative results.',
+    focus: 'Statistical validity, reproducibility, and whether results are overclaimed.',
+  },
+  {
+    id: 'literature',
+    name: 'Related Work & Claims Reviewer',
+    persona:
+      'Reviews meticulously for honesty: checks whether the paper positions its contribution honestly, distinguishes evidence from speculation, and makes claims at the right level of scope. Calls out missing comparisons and citations that do not support the surrounding argument.',
+    focus: 'Honest positioning — claims scoped correctly, with citations that actually support the argument.',
+  },
+  {
+    id: 'clarity',
+    name: 'Clarity & Reproducibility Reviewer',
+    persona:
+      'Reviews for whether another research group could understand, reproduce, and build on the work. Traces definitions, datasets, implementation details, and stated limitations, and turns ambiguities into concrete questions for the authors.',
+    focus: 'Whether another research group could actually understand, reproduce, and build on the work.',
+  },
+]
 
 // #80 task 1: a distinct adversarial pass, not another persona of the same
 // kind as the preset reviewer lenses — explicitly hunting for the single
 // most damaging flaw, the way the harshest reviewer on a committee would,
 // rather than producing a balanced list of pros and cons.
-export const DEVILS_ADVOCATE_AGENT = {
+export const DEVILS_ADVOCATE_AGENT: ReviewerAgentDef = {
   id: 'devils-advocate',
   name: "Devil's Advocate Reviewer",
   persona:
     "Reviews adversarially, the way the harshest reviewer on a program committee would. Actively hunts for the single most damaging flaw — not a balanced list of minor nitpicks, but the one issue that would justify a reject on its own if true. States the sharpest version of every criticism instead of softening it to be diplomatic. Still grounds every claim in the paper's actual text — never invents a flaw the paper does not exhibit.",
+  focus: 'An adversarial pass — hunts for the single most damaging flaw, phrased as bluntly as the harshest real reviewer would.',
 }
 
 export interface ReviewerVerdict {
