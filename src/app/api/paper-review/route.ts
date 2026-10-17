@@ -20,6 +20,7 @@ import {
   findDisagreements,
   parseRevisionRoadmap,
   sortRevisionRoadmap,
+  parseResponseLetter,
   type Disagreement,
 } from '@/lib/reviewRehearsal'
 
@@ -437,6 +438,30 @@ Return ONLY JSON: {"items":[{"issue":"one specific, actionable revision item","b
     revisionRoadmap = sortRevisionRoadmap(parseRevisionRoadmap(roadmapResult?.items))
   }
 
+  // #80 task 4: a drafting aid, not a finished rebuttal — a starting point
+  // for how the author could respond to each blocking (or, if there are
+  // none, top) comment: point to existing evidence, propose an additional
+  // experiment, or concede and soften the claim. Explicitly a pre-submission
+  // rehearsal tool (task 5) — real reviewer comments come later and are a
+  // different, real thing this does not pretend to replace.
+  const commentsToAddress = (revisionRoadmap.blocking.length > 0 ? revisionRoadmap.blocking : revisionRoadmap.niceToFix).slice(0, 6)
+  let responseLetterSkeleton: { comment: string; draftResponse: string }[] = []
+  if (commentsToAddress.length > 0) {
+    const responsePrompt = `An author is preparing to resubmit a paper after a simulated peer review. Here are the most important comments to address:
+
+${JSON.stringify(commentsToAddress)}
+
+For each comment, draft a short starting point (2-3 sentences) for how the author could respond in a response letter — e.g. pointing to evidence already in the paper, proposing a concrete additional experiment or analysis, or conceding the point and softening the related claim. These are drafting aids for the author to edit, not finished text, and must not fabricate results, data, or experiments that do not exist.
+
+Return ONLY JSON: {"items":[{"comment":"the review comment, verbatim or trimmed","draftResponse":"the drafted starting point"}]}`
+    const responseResult = await askGroq(
+      responsePrompt,
+      'You help authors draft response letters to peer review. Never invent results or experiments. Respond with valid JSON only.',
+      2200
+    )
+    responseLetterSkeleton = parseResponseLetter(responseResult?.items)
+  }
+
   return NextResponse.json({
     schemaVersion: 3,
     document: {
@@ -451,6 +476,7 @@ Return ONLY JSON: {"items":[{"issue":"one specific, actionable revision item","b
     references: await referencesPromise,
     disagreements,
     revisionRoadmap,
+    responseLetterSkeleton,
     final: {
       scores: finalScores,
       consensus,
