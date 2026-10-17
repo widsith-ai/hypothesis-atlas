@@ -15,6 +15,7 @@ import {
   type PaperDocument,
   type ReviewClaimInput,
 } from '@/lib/review-grounding'
+import { DEVILS_ADVOCATE_AGENT, findDisagreements, type Disagreement } from '@/lib/reviewRehearsal'
 
 export const maxDuration = 60
 
@@ -317,6 +318,10 @@ export async function POST(request: NextRequest) {
       persona: `${customPersona} Review the paper in character, consistent with this description.`,
     }
   }
+  // #80 task 1: a distinct adversarial pass runs in addition to the roster
+  // (not swapped in for one of the preset lenses) — diversifying the review
+  // approach itself, not just adding another balanced-persona prompt.
+  roster.push(DEVILS_ADVOCATE_AGENT)
 
   const generated: AgentReview[] = []
   for (const agent of roster) {
@@ -344,6 +349,13 @@ export async function POST(request: NextRequest) {
   for (const agent of available) recCounts.set(agent.recommendation!, (recCounts.get(agent.recommendation!) ?? 0) + 1)
   const consensus = [...recCounts.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? 'major revision'
 
+  // #80 task 1: reconcile where the reviewers (including the adversarial
+  // pass) actually disagree — the average score and majority consensus
+  // above can both look clean while hiding a real split.
+  const disagreements: Disagreement[] = findDisagreements(
+    available.map((agent) => ({ name: agent.name, recommendation: agent.recommendation!, overallScore: agent.scores!.overall }))
+  )
+
   const metaPrompt = `You are the meta-reviewer (senior program chair / editor-in-chief) for ${venueName}. Below are ${available.length} completed peer reviews of the same paper draft, as JSON:
 
 ${JSON.stringify(
@@ -370,7 +382,7 @@ Return ONLY JSON: {"metaReview":"..."}`
   const nonRecurringClaimCount = allClaims.filter((claim) => claim.suspectedHallucination).length
 
   return NextResponse.json({
-    schemaVersion: 2,
+    schemaVersion: 3,
     document: {
       reviewedCharacters: document.text.length,
       sanitization: {
@@ -381,6 +393,7 @@ Return ONLY JSON: {"metaReview":"..."}`
     venue: { name: venueName, url: venueUrl || null, criteria: venueCriteria, focus: venueFocus },
     agents,
     references: await referencesPromise,
+    disagreements,
     final: {
       scores: finalScores,
       consensus,
