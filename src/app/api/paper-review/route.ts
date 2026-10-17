@@ -356,17 +356,17 @@ export async function POST(request: NextRequest) {
     available.map((agent) => ({ name: agent.name, recommendation: agent.recommendation!, overallScore: agent.scores!.overall }))
   )
 
+  const reviewSummaries = available.map((agent) => ({
+    reviewer: agent.name,
+    summary: agent.summary,
+    scores: agent.scores,
+    recommendation: agent.recommendation,
+    topWeaknesses: (agent.weaknesses ?? []).slice(0, 2),
+  }))
+
   const metaPrompt = `You are the meta-reviewer (senior program chair / editor-in-chief) for ${venueName}. Below are ${available.length} completed peer reviews of the same paper draft, as JSON:
 
-${JSON.stringify(
-    available.map((agent) => ({
-      reviewer: agent.name,
-      summary: agent.summary,
-      scores: agent.scores,
-      recommendation: agent.recommendation,
-      topWeaknesses: (agent.weaknesses ?? []).slice(0, 2),
-    }))
-  )}
+${JSON.stringify(reviewSummaries)}
 
 Aggregate scores (1-10 averages): novelty ${finalScores.novelty}, soundness ${finalScores.soundness}, clarity ${finalScores.clarity}, significance ${finalScores.significance}, overall ${finalScores.overall}.
 
@@ -378,6 +378,31 @@ Return ONLY JSON: {"metaReview":"..."}`
     meta && typeof meta.metaReview === 'string' && meta.metaReview.trim()
       ? meta.metaReview.trim().slice(0, 1200)
       : `${available.length} reviewers reached consensus: ${consensus}. Overall score ${finalScores.overall}/10. Address the shared weaknesses above before resubmission.`
+
+  // #80 task 2: the actual decision letter a chair/editor would send, not
+  // just the terse internal meta-review above — states the decision
+  // up front and gives the reasoning, including any disagreement found.
+  const decisionLetterPrompt = `You are the program chair / editor-in-chief for ${venueName}, writing the formal decision letter for this paper draft after ${available.length} reviews.
+
+Reviews (JSON): ${JSON.stringify(reviewSummaries)}
+
+Aggregate scores (1-10): novelty ${finalScores.novelty}, soundness ${finalScores.soundness}, clarity ${finalScores.clarity}, significance ${finalScores.significance}, overall ${finalScores.overall}.
+Majority-recommendation consensus: ${consensus}.
+${disagreements.length > 0 ? `Reviewers disagreed on: ${disagreements.map((d) => d.description).join(' ')}` : 'Reviewers were broadly aligned.'}
+
+Write the actual decision letter the authors would receive: a brief salutation, the decision stated plainly in the first sentence, 2-4 sentences of reasoning that reference the specific points above (including the disagreement, if any, rather than hiding it behind an average), and a short closing sentence. Address the authors directly ("Dear Authors," / "We have reached a decision..."). This is a simulated pre-submission rehearsal, not a real decision — write it exactly as the real letter would read, but do not claim to be affiliated with ${venueName} itself.
+
+Return ONLY JSON: {"decisionLetter":"..."}`
+  const decisionLetterResult = await askGroq(
+    decisionLetterPrompt,
+    'You are a senior editor writing a formal decision letter. Respond with valid JSON only.',
+    900
+  )
+  const decisionLetter =
+    decisionLetterResult && typeof decisionLetterResult.decisionLetter === 'string' && decisionLetterResult.decisionLetter.trim()
+      ? decisionLetterResult.decisionLetter.trim().slice(0, 1800)
+      : `Dear Authors,\n\nAfter ${available.length} reviews, the decision is: ${consensus}. The overall score was ${finalScores.overall}/10.${disagreements.length > 0 ? ' Reviewers were not fully aligned — see the disagreements noted above.' : ''} Please address the weaknesses raised in the individual reviews.\n\nRegards,\nThe Editors`
+
   const allClaims = available.flatMap((agent) => agent.claims ?? [])
   const nonRecurringClaimCount = allClaims.filter((claim) => claim.suspectedHallucination).length
 
@@ -398,6 +423,7 @@ Return ONLY JSON: {"metaReview":"..."}`
       scores: finalScores,
       consensus,
       metaReview,
+      decisionLetter,
       reviewerCount: available.length,
       grounding: summarizeGrounding(allClaims),
       selfConsistency: { reviewerCount: available.length, nonRecurringClaimCount },
