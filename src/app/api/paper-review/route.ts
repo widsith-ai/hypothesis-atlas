@@ -15,7 +15,13 @@ import {
   type PaperDocument,
   type ReviewClaimInput,
 } from '@/lib/review-grounding'
-import { DEVILS_ADVOCATE_AGENT, findDisagreements, type Disagreement } from '@/lib/reviewRehearsal'
+import {
+  DEVILS_ADVOCATE_AGENT,
+  findDisagreements,
+  parseRevisionRoadmap,
+  sortRevisionRoadmap,
+  type Disagreement,
+} from '@/lib/reviewRehearsal'
 
 export const maxDuration = 60
 
@@ -406,6 +412,31 @@ Return ONLY JSON: {"decisionLetter":"..."}`
   const allClaims = available.flatMap((agent) => agent.claims ?? [])
   const nonRecurringClaimCount = allClaims.filter((claim) => claim.suspectedHallucination).length
 
+  // #80 task 3: turn the scattered per-reviewer weaknesses into one
+  // prioritized list — which are submission-blocking vs. nice-to-fix, in
+  // the order a time-constrained author should tackle them. Dedupes
+  // near-identical weaknesses raised by more than one reviewer rather than
+  // listing them once per reviewer.
+  const allWeaknesses = available.flatMap((agent) =>
+    (agent.weaknesses ?? []).map((text) => ({ text, reviewer: agent.name }))
+  )
+  let revisionRoadmap = { blocking: [] as string[], niceToFix: [] as string[] }
+  if (allWeaknesses.length > 0) {
+    const roadmapPrompt = `Below are the weaknesses raised across ${available.length} peer reviews of the same paper draft (some may be near-duplicates raised by more than one reviewer):
+
+${JSON.stringify(allWeaknesses)}
+
+Produce a prioritized revision roadmap for the author. Merge near-duplicate weaknesses into one entry. Mark an entry "blocking" only if it would plausibly justify a reject/major-revision on its own if left unaddressed; everything else is non-blocking ("nice to fix"). Order each list from most to least urgent.
+
+Return ONLY JSON: {"items":[{"issue":"one specific, actionable revision item","blocking":true}]}`
+    const roadmapResult = await askGroq(
+      roadmapPrompt,
+      'You are helping an author triage peer-review feedback before resubmission. Respond with valid JSON only.',
+      1800
+    )
+    revisionRoadmap = sortRevisionRoadmap(parseRevisionRoadmap(roadmapResult?.items))
+  }
+
   return NextResponse.json({
     schemaVersion: 3,
     document: {
@@ -419,6 +450,7 @@ Return ONLY JSON: {"decisionLetter":"..."}`
     agents,
     references: await referencesPromise,
     disagreements,
+    revisionRoadmap,
     final: {
       scores: finalScores,
       consensus,
