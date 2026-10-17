@@ -23,10 +23,28 @@ interface AgentReview {
   recommendation?: string;
 }
 
+interface Disagreement {
+  description: string;
+  reviewers: string[];
+}
+
+interface RevisionRoadmap {
+  blocking: string[];
+  niceToFix: string[];
+}
+
+interface ResponseLetterEntry {
+  comment: string;
+  draftResponse: string;
+}
+
 interface ReviewResult {
   venue: { name: string; url: string | null; criteria: string[]; focus: string[] };
   agents: AgentReview[];
-  final: { scores: ReviewScores; consensus: string; metaReview: string; reviewerCount: number };
+  disagreements?: Disagreement[];
+  revisionRoadmap?: RevisionRoadmap;
+  responseLetterSkeleton?: ResponseLetterEntry[];
+  final: { scores: ReviewScores; consensus: string; metaReview: string; decisionLetter?: string; reviewerCount: number };
 }
 
 const PRESET_VENUES = [
@@ -249,9 +267,12 @@ export default function PaperReviewPanel() {
       {/* Setup */}
       <div className={inputCard}>
         <h2 className="text-lg font-semibold text-gray-900 mb-1">Peer Review Session</h2>
-        <p className="text-sm text-gray-500 mb-5">
+        <p className="text-sm text-gray-500 mb-2">
           Choose a publisher — or paste its call-for-papers page so reviewers grade against its real criteria.
-          A committee of three reviewer agents (plus your custom one) will review your paper and produce a final score.
+          A committee of three reviewer agents (plus your custom one and an adversarial Devil&apos;s Advocate pass) will review your paper and produce a final decision.
+        </p>
+        <p className="text-xs text-gray-400 mb-5">
+          This is a pre-submission rehearsal — a simulated review to help you prepare, not a substitute for real reviewer feedback once you actually submit.
         </p>
 
         <div className="grid md:grid-cols-2 gap-4 mb-4">
@@ -427,11 +448,40 @@ export default function PaperReviewPanel() {
             </p>
           </div>
 
+          {/* #80: the actual decision letter, not just the terse internal meta-review above */}
+          {result.final.decisionLetter && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-900">Simulated Decision Letter</h3>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Pre-submission rehearsal — not a real decision</span>
+              </div>
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{result.final.decisionLetter}</p>
+            </div>
+          )}
+
+          {/* #80: points where reviewers (including the adversarial pass) genuinely split, which the averaged score can hide */}
+          {(result.disagreements?.length ?? 0) > 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+              <h3 className="text-sm font-semibold text-amber-800 mb-2">Where Reviewers Disagreed</h3>
+              <ul className="space-y-1.5">
+                {result.disagreements!.map((d, i) => (
+                  <li key={i} className="text-xs text-amber-800 flex gap-2 leading-relaxed">
+                    <span className="flex-shrink-0">⚠</span>{d.description}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Per-agent reviews */}
           {result.agents.map((agent, idx) => {
             const hue = AGENT_HUES[idx % AGENT_HUES.length];
+            const isDevilsAdvocate = agent.id === "devils-advocate";
             return (
-              <div key={agent.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <div
+                key={agent.id}
+                className={`bg-white rounded-2xl border shadow-sm p-6 ${isDevilsAdvocate ? "border-red-200" : "border-gray-200"}`}
+              >
                 <div className="flex flex-wrap items-center gap-3 mb-4">
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0"
@@ -440,7 +490,14 @@ export default function PaperReviewPanel() {
                     {agent.name.replace(/^Prof\.\s*|^Dr\.\s*/, "").charAt(0)}
                   </div>
                   <div className="flex-1 min-w-[200px]">
-                    <p className="font-semibold text-gray-900 text-sm">{agent.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-gray-900 text-sm">{agent.name}</p>
+                      {isDevilsAdvocate && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-red-50 text-red-600">
+                          Adversarial pass
+                        </span>
+                      )}
+                    </div>
                     {agent.unavailable ? (
                       <p className="text-xs text-red-500">This reviewer failed — LLM service may have been rate-limited.</p>
                     ) : (
@@ -523,6 +580,56 @@ export default function PaperReviewPanel() {
               </div>
             );
           })}
+
+          {/* #80: a prioritized, deduped revision list — which weaknesses are submission-blocking vs. nice-to-fix */}
+          {((result.revisionRoadmap?.blocking.length ?? 0) > 0 || (result.revisionRoadmap?.niceToFix.length ?? 0) > 0) && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">Revision Roadmap</h3>
+              <p className="text-xs text-gray-400 mb-4">Deduplicated across reviewers, ordered most to least urgent within each list.</p>
+              <div className="grid md:grid-cols-2 gap-4">
+                {(result.revisionRoadmap?.blocking.length ?? 0) > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-2">Blocking</p>
+                    <ol className="space-y-1.5 list-decimal list-inside">
+                      {result.revisionRoadmap!.blocking.map((issue, i) => (
+                        <li key={i} className="text-xs text-gray-700 leading-relaxed">{issue}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+                {(result.revisionRoadmap?.niceToFix.length ?? 0) > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Nice to Fix</p>
+                    <ol className="space-y-1.5 list-decimal list-inside">
+                      {result.revisionRoadmap!.niceToFix.map((issue, i) => (
+                        <li key={i} className="text-xs text-gray-600 leading-relaxed">{issue}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* #80: a drafting aid for the author, not a finished rebuttal — see the disclaimer below */}
+          {(result.responseLetterSkeleton?.length ?? 0) > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-semibold text-gray-900">Response Letter — Draft Starting Points</h3>
+              </div>
+              <p className="text-xs text-gray-400 mb-4">
+                Drafting aids to edit, not a finished rebuttal — and a pre-submission rehearsal, not a response to a real review.
+              </p>
+              <div className="space-y-4">
+                {result.responseLetterSkeleton!.map((entry, i) => (
+                  <div key={i} className="rounded-xl border border-gray-100 p-3">
+                    <p className="text-xs font-semibold text-gray-600 mb-1">Comment: {entry.comment}</p>
+                    <p className="text-xs text-gray-600 leading-relaxed">{entry.draftResponse}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
