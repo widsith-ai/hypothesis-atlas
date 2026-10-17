@@ -7,6 +7,7 @@ import { syncJobGraph } from '@/lib/research-graph'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { isAuthRequired } from '@/lib/authConfig'
+import { stripGlyphMappingArtifacts } from '@/lib/textExtraction'
 
 export const maxDuration = 60
 
@@ -17,7 +18,7 @@ function fileBaseName(name: string): string {
 }
 
 function cleanText(raw: string): string {
-  return raw
+  return stripGlyphMappingArtifacts(raw)
     .replace(/\r\n/g, '\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
