@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { extractAtlasPlanDraft, extractLegacyArsDraft, pickNewestDraft, type DraftCandidate, type DraftInfo } from "@/lib/paperDraftMigration";
 import { PRESET_AGENTS, DEVILS_ADVOCATE_AGENT } from "@/lib/reviewRehearsal";
+import { buildReviewReportMarkdown, reviewReportFileName } from "@/lib/reviewReportExport";
 
 interface ReviewScores {
   novelty: number;
@@ -331,6 +332,21 @@ export default function PaperReviewPanel() {
     try { localStorage.removeItem(cacheKey); } catch {}
   };
 
+  const handleDownloadReport = () => {
+    if (!result) return;
+    const label = uploadedName.replace(/\.(pdf|txt|md)$/i, "") || draftInfo?.label || "Paper";
+    const markdown = buildReviewReportMarkdown(label, result);
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = reviewReportFileName(label);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const inputCard = "bg-white rounded-2xl border border-gray-200 p-6 shadow-sm";
 
   return (
@@ -508,9 +524,17 @@ export default function PaperReviewPanel() {
             {loading ? "Running review…" : result ? "Re-run Review" : "Start Review"}
           </button>
           {result && (
-            <button onClick={clearReview} className="text-sm text-gray-400 hover:text-red-500 transition-colors">
-              Clear
-            </button>
+            <>
+              <button
+                onClick={handleDownloadReport}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-200 text-gray-600 hover:border-gray-300 hover:text-gray-800 transition-colors"
+              >
+                Download Report
+              </button>
+              <button onClick={clearReview} className="text-sm text-gray-400 hover:text-red-500 transition-colors">
+                Clear
+              </button>
+            </>
           )}
         </div>
 
