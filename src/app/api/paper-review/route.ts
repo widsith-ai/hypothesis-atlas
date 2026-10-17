@@ -240,6 +240,17 @@ Every review point must be exactly one atomic claim and cite 1-3 real source sen
   return { id: agent.id, name: agent.name, unavailable: true }
 }
 
+// #83: one line of newline-delimited JSON per event — a `plan` listing every
+// step up front (so the client can render a determinate progress bar from
+// the start, not a guess), a `progress` event as each step starts/finishes,
+// and a final `result` (or `error`) event carrying the same payload the
+// route used to return as a single JSON response.
+type ReviewStreamEvent =
+  | { type: 'plan'; steps: { step: string; label: string }[] }
+  | { type: 'progress'; step: string; status: 'started' | 'completed' }
+  | { type: 'error'; error: string }
+  | { type: 'result'; [key: string]: unknown }
+
 export async function POST(request: NextRequest) {
   if (!groq) {
     return NextResponse.json(
@@ -264,22 +275,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Venue URL must start with http:// or https://' }, { status: 400 })
   }
 
-  const document = createPaperDocument(sanitized.text.slice(0, 18000))
-  const referencesPromise = verifyReferences(sanitized.text)
-
-  let venueCriteria: string[] = []
-  let venueFocus: string[] = []
-  let venueName = venueNameInput
-  if (venueUrl) {
-    const extracted = await extractVenueCriteria(venueUrl)
-    if (extracted) {
-      venueCriteria = extracted.criteria
-      venueFocus = extracted.focus
-      if (!venueName && extracted.name) venueName = extracted.name
-    }
-  }
-  if (!venueName) venueName = 'the target venue'
-
   const roster = [...PRESET_AGENTS.slice(0, reviewCount)]
   const customName = String(custom?.name ?? '').trim().slice(0, 80)
   const customPersona = String(custom?.persona ?? '').trim().slice(0, 600)
@@ -296,61 +291,102 @@ export async function POST(request: NextRequest) {
   // approach itself, not just adding another balanced-persona prompt.
   roster.push(DEVILS_ADVOCATE_AGENT)
 
-  const generated: AgentReview[] = []
-  for (const agent of roster) {
-    generated.push(await reviewAsAgent({ agent, document, venueName, venueCriteria, venueFocus }))
-  }
-  // #80 code review: applySelfConsistency flags a claim no other reviewer
-  // corroborates as `suspectedHallucination` — correct for the balanced
-  // preset lenses, but the Devil's Advocate is deliberately prompted to
-  // surface "the single most damaging flaw" the others would not raise the
-  // same way. Without this, its most valuable finding would be the one
-  // most likely to get auto-flagged as a probable hallucination, purely
-  // for doing its job. It can still corroborate (or be corroborated by)
-  // other reviewers' claims — only its own claims' hallucination flag is
-  // cleared.
-  const agents = applySelfConsistency(generated).map((agent) =>
-    agent.id === DEVILS_ADVOCATE_AGENT.id
-      ? { ...agent, claims: agent.claims?.map((claim) => ({ ...claim, suspectedHallucination: false })) }
-      : agent
-  )
-  const available = agents.filter((agent) => !agent.unavailable && agent.scores)
-  if (available.length === 0) {
-    return NextResponse.json(
-      { error: 'All reviewer agents failed — the LLM service may be rate-limited. Try again in a moment.' },
-      { status: 502 }
-    )
-  }
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      const emit = (event: ReviewStreamEvent) => controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'))
 
-  const average = (key: keyof ReviewScores) =>
-    Math.round((available.reduce((sum, agent) => sum + (agent.scores![key] as number), 0) / available.length) * 10) / 10
-  const finalScores: ReviewScores = {
-    novelty: average('novelty'),
-    soundness: average('soundness'),
-    clarity: average('clarity'),
-    significance: average('significance'),
-    overall: average('overall'),
-  }
-  const recCounts = new Map<string, number>()
-  for (const agent of available) recCounts.set(agent.recommendation!, (recCounts.get(agent.recommendation!) ?? 0) + 1)
-  const consensus = [...recCounts.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? 'major revision'
+      try {
+        emit({
+          type: 'plan',
+          steps: [
+            { step: 'venue', label: 'Preparing the paper and venue criteria' },
+            { step: 'references', label: 'Checking references' },
+            ...roster.map((agent) => ({ step: agent.id, label: `${agent.name} reviewing` })),
+            { step: 'synthesis', label: "Writing the editor's meta-review and decision letter" },
+            { step: 'roadmap', label: 'Building the revision roadmap' },
+            { step: 'response-letter', label: 'Drafting response-letter starting points' },
+          ],
+        })
 
-  // #80 task 1: reconcile where the reviewers (including the adversarial
-  // pass) actually disagree — the average score and majority consensus
-  // above can both look clean while hiding a real split.
-  const disagreements: Disagreement[] = findDisagreements(
-    available.map((agent) => ({ name: agent.name, recommendation: agent.recommendation!, overallScore: agent.scores!.overall }))
-  )
+        emit({ type: 'progress', step: 'venue', status: 'started' })
+        const document = createPaperDocument(sanitized.text.slice(0, 18000))
+        emit({ type: 'progress', step: 'references', status: 'started' })
+        const referencesPromise = verifyReferences(sanitized.text)
 
-  const reviewSummaries = available.map((agent) => ({
-    reviewer: agent.name,
-    summary: agent.summary,
-    scores: agent.scores,
-    recommendation: agent.recommendation,
-    topWeaknesses: (agent.weaknesses ?? []).slice(0, 2),
-  }))
+        let venueCriteria: string[] = []
+        let venueFocus: string[] = []
+        let venueName = venueNameInput
+        if (venueUrl) {
+          const extracted = await extractVenueCriteria(venueUrl)
+          if (extracted) {
+            venueCriteria = extracted.criteria
+            venueFocus = extracted.focus
+            if (!venueName && extracted.name) venueName = extracted.name
+          }
+        }
+        if (!venueName) venueName = 'the target venue'
+        emit({ type: 'progress', step: 'venue', status: 'completed' })
 
-  const metaPrompt = `You are the meta-reviewer (senior program chair / editor-in-chief) for ${venueName}. Below are ${available.length} completed peer reviews of the same paper draft, as JSON:
+        const generated: AgentReview[] = []
+        for (const agent of roster) {
+          emit({ type: 'progress', step: agent.id, status: 'started' })
+          generated.push(await reviewAsAgent({ agent, document, venueName, venueCriteria, venueFocus }))
+          emit({ type: 'progress', step: agent.id, status: 'completed' })
+        }
+
+        // #80 code review: applySelfConsistency flags a claim no other
+        // reviewer corroborates as `suspectedHallucination` — correct for
+        // the balanced preset lenses, but the Devil's Advocate is
+        // deliberately prompted to surface "the single most damaging flaw"
+        // the others would not raise the same way. Without this, its most
+        // valuable finding would be the one most likely to get
+        // auto-flagged as a probable hallucination, purely for doing its
+        // job. It can still corroborate (or be corroborated by) other
+        // reviewers' claims — only its own claims' hallucination flag is
+        // cleared.
+        const agents = applySelfConsistency(generated).map((agent) =>
+          agent.id === DEVILS_ADVOCATE_AGENT.id
+            ? { ...agent, claims: agent.claims?.map((claim) => ({ ...claim, suspectedHallucination: false })) }
+            : agent
+        )
+        const available = agents.filter((agent) => !agent.unavailable && agent.scores)
+        if (available.length === 0) {
+          emit({ type: 'error', error: 'All reviewer agents failed — the LLM service may be rate-limited. Try again in a moment.' })
+          return
+        }
+
+        const average = (key: keyof ReviewScores) =>
+          Math.round((available.reduce((sum, agent) => sum + (agent.scores![key] as number), 0) / available.length) * 10) / 10
+        const finalScores: ReviewScores = {
+          novelty: average('novelty'),
+          soundness: average('soundness'),
+          clarity: average('clarity'),
+          significance: average('significance'),
+          overall: average('overall'),
+        }
+        const recCounts = new Map<string, number>()
+        for (const agent of available) recCounts.set(agent.recommendation!, (recCounts.get(agent.recommendation!) ?? 0) + 1)
+        const consensus = [...recCounts.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? 'major revision'
+
+        // #80 task 1: reconcile where the reviewers (including the
+        // adversarial pass) actually disagree — the average score and
+        // majority consensus above can both look clean while hiding a real
+        // split.
+        const disagreements: Disagreement[] = findDisagreements(
+          available.map((agent) => ({ name: agent.name, recommendation: agent.recommendation!, overallScore: agent.scores!.overall }))
+        )
+
+        const reviewSummaries = available.map((agent) => ({
+          reviewer: agent.name,
+          summary: agent.summary,
+          scores: agent.scores,
+          recommendation: agent.recommendation,
+          topWeaknesses: (agent.weaknesses ?? []).slice(0, 2),
+        }))
+
+        emit({ type: 'progress', step: 'synthesis', status: 'started' })
+        const metaPrompt = `You are the meta-reviewer (senior program chair / editor-in-chief) for ${venueName}. Below are ${available.length} completed peer reviews of the same paper draft, as JSON:
 
 ${JSON.stringify(reviewSummaries)}
 
@@ -360,10 +396,11 @@ Write the meta-review an editor would send the authors: 3-5 sentences weighing w
 
 Return ONLY JSON: {"metaReview":"..."}`
 
-  // #80 task 2: the actual decision letter a chair/editor would send, not
-  // just the terse internal meta-review above — states the decision
-  // up front and gives the reasoning, including any disagreement found.
-  const decisionLetterPrompt = `You are the program chair / editor-in-chief for ${venueName}, writing the formal decision letter for this paper draft after ${available.length} reviews.
+        // #80 task 2: the actual decision letter a chair/editor would send,
+        // not just the terse internal meta-review above — states the
+        // decision up front and gives the reasoning, including any
+        // disagreement found.
+        const decisionLetterPrompt = `You are the program chair / editor-in-chief for ${venueName}, writing the formal decision letter for this paper draft after ${available.length} reviews.
 
 Reviews (JSON): ${JSON.stringify(reviewSummaries)}
 
@@ -375,98 +412,123 @@ Write the actual decision letter the authors would receive: a brief salutation, 
 
 Return ONLY JSON: {"decisionLetter":"..."}`
 
-  // #80 code review: these two calls don't depend on each other — running
-  // them sequentially (as originally written) stacked extra latency onto
-  // an already-sequential reviewer-roster loop, inside the route's 60s
-  // maxDuration. Promise.all lets them run concurrently instead.
-  const [meta, decisionLetterResult] = await Promise.all([
-    askGroq(metaPrompt, 'You are a senior editor writing a meta-review. Respond with valid JSON only.', 900),
-    askGroq(decisionLetterPrompt, 'You are a senior editor writing a formal decision letter. Respond with valid JSON only.', 900),
-  ])
-  const metaReview =
-    meta && typeof meta.metaReview === 'string' && meta.metaReview.trim()
-      ? meta.metaReview.trim().slice(0, 1200)
-      : `${available.length} reviewers reached consensus: ${consensus}. Overall score ${finalScores.overall}/10. Address the shared weaknesses above before resubmission.`
-  const decisionLetter =
-    decisionLetterResult && typeof decisionLetterResult.decisionLetter === 'string' && decisionLetterResult.decisionLetter.trim()
-      ? decisionLetterResult.decisionLetter.trim().slice(0, 1800)
-      : `Dear Authors,\n\nAfter ${available.length} reviews, the decision is: ${consensus}. The overall score was ${finalScores.overall}/10.${disagreements.length > 0 ? ' Reviewers were not fully aligned — see the disagreements noted above.' : ''} Please address the weaknesses raised in the individual reviews.\n\nRegards,\nThe Editors`
+        // #80 code review: these two calls don't depend on each other —
+        // Promise.all lets them run concurrently instead of stacking extra
+        // sequential latency onto the already-sequential roster loop above.
+        const [meta, decisionLetterResult] = await Promise.all([
+          askGroq(metaPrompt, 'You are a senior editor writing a meta-review. Respond with valid JSON only.', 900),
+          askGroq(decisionLetterPrompt, 'You are a senior editor writing a formal decision letter. Respond with valid JSON only.', 900),
+        ])
+        const metaReview =
+          meta && typeof meta.metaReview === 'string' && meta.metaReview.trim()
+            ? meta.metaReview.trim().slice(0, 1200)
+            : `${available.length} reviewers reached consensus: ${consensus}. Overall score ${finalScores.overall}/10. Address the shared weaknesses above before resubmission.`
+        const decisionLetter =
+          decisionLetterResult && typeof decisionLetterResult.decisionLetter === 'string' && decisionLetterResult.decisionLetter.trim()
+            ? decisionLetterResult.decisionLetter.trim().slice(0, 1800)
+            : `Dear Authors,\n\nAfter ${available.length} reviews, the decision is: ${consensus}. The overall score was ${finalScores.overall}/10.${disagreements.length > 0 ? ' Reviewers were not fully aligned — see the disagreements noted above.' : ''} Please address the weaknesses raised in the individual reviews.\n\nRegards,\nThe Editors`
+        emit({ type: 'progress', step: 'synthesis', status: 'completed' })
 
-  const allClaims = available.flatMap((agent) => agent.claims ?? [])
-  const nonRecurringClaimCount = allClaims.filter((claim) => claim.suspectedHallucination).length
+        const allClaims = available.flatMap((agent) => agent.claims ?? [])
+        const nonRecurringClaimCount = allClaims.filter((claim) => claim.suspectedHallucination).length
 
-  // #80 task 3: turn the scattered per-reviewer weaknesses into one
-  // prioritized list — which are submission-blocking vs. nice-to-fix, in
-  // the order a time-constrained author should tackle them. Dedupes
-  // near-identical weaknesses raised by more than one reviewer rather than
-  // listing them once per reviewer.
-  const allWeaknesses = available.flatMap((agent) =>
-    (agent.weaknesses ?? []).map((text) => ({ text, reviewer: agent.name }))
-  )
-  let revisionRoadmap = { blocking: [] as string[], niceToFix: [] as string[] }
-  if (allWeaknesses.length > 0) {
-    const roadmapPrompt = `Below are the weaknesses raised across ${available.length} peer reviews of the same paper draft (some may be near-duplicates raised by more than one reviewer):
+        // #80 task 3: turn the scattered per-reviewer weaknesses into one
+        // prioritized list — which are submission-blocking vs. nice-to-fix,
+        // in the order a time-constrained author should tackle them.
+        // Dedupes near-identical weaknesses raised by more than one
+        // reviewer rather than listing them once per reviewer.
+        emit({ type: 'progress', step: 'roadmap', status: 'started' })
+        const allWeaknesses = available.flatMap((agent) =>
+          (agent.weaknesses ?? []).map((text) => ({ text, reviewer: agent.name }))
+        )
+        let revisionRoadmap = { blocking: [] as string[], niceToFix: [] as string[] }
+        if (allWeaknesses.length > 0) {
+          const roadmapPrompt = `Below are the weaknesses raised across ${available.length} peer reviews of the same paper draft (some may be near-duplicates raised by more than one reviewer):
 
 ${JSON.stringify(allWeaknesses)}
 
 Produce a prioritized revision roadmap for the author. Merge near-duplicate weaknesses into one entry. Mark an entry "blocking" only if it would plausibly justify a reject/major-revision on its own if left unaddressed; everything else is non-blocking ("nice to fix"). Order each list from most to least urgent.
 
 Return ONLY JSON: {"items":[{"issue":"one specific, actionable revision item","blocking":true}]}`
-    const roadmapResult = await askGroq(
-      roadmapPrompt,
-      'You are helping an author triage peer-review feedback before resubmission. Respond with valid JSON only.',
-      1800
-    )
-    revisionRoadmap = sortRevisionRoadmap(parseRevisionRoadmap(roadmapResult?.items))
-  }
+          const roadmapResult = await askGroq(
+            roadmapPrompt,
+            'You are helping an author triage peer-review feedback before resubmission. Respond with valid JSON only.',
+            1800
+          )
+          revisionRoadmap = sortRevisionRoadmap(parseRevisionRoadmap(roadmapResult?.items))
+        }
+        emit({ type: 'progress', step: 'roadmap', status: 'completed' })
 
-  // #80 task 4: a drafting aid, not a finished rebuttal — a starting point
-  // for how the author could respond to each blocking (or, if there are
-  // none, top) comment: point to existing evidence, propose an additional
-  // experiment, or concede and soften the claim. Explicitly a pre-submission
-  // rehearsal tool (task 5) — real reviewer comments come later and are a
-  // different, real thing this does not pretend to replace.
-  const commentsToAddress = (revisionRoadmap.blocking.length > 0 ? revisionRoadmap.blocking : revisionRoadmap.niceToFix).slice(0, 6)
-  let responseLetterSkeleton: { comment: string; draftResponse: string }[] = []
-  if (commentsToAddress.length > 0) {
-    const responsePrompt = `An author is preparing to resubmit a paper after a simulated peer review. Here are the most important comments to address:
+        // #80 task 4: a drafting aid, not a finished rebuttal — a starting
+        // point for how the author could respond to each blocking (or, if
+        // there are none, top) comment: point to existing evidence,
+        // propose an additional experiment, or concede and soften the
+        // claim. Explicitly a pre-submission rehearsal tool (task 5) —
+        // real reviewer comments come later and are a different, real
+        // thing this does not pretend to replace.
+        emit({ type: 'progress', step: 'response-letter', status: 'started' })
+        const commentsToAddress = (revisionRoadmap.blocking.length > 0 ? revisionRoadmap.blocking : revisionRoadmap.niceToFix).slice(0, 6)
+        let responseLetterSkeleton: { comment: string; draftResponse: string }[] = []
+        if (commentsToAddress.length > 0) {
+          const responsePrompt = `An author is preparing to resubmit a paper after a simulated peer review. Here are the most important comments to address:
 
 ${JSON.stringify(commentsToAddress)}
 
 For each comment, draft a short starting point (2-3 sentences) for how the author could respond in a response letter — e.g. pointing to evidence already in the paper, proposing a concrete additional experiment or analysis, or conceding the point and softening the related claim. These are drafting aids for the author to edit, not finished text, and must not fabricate results, data, or experiments that do not exist.
 
 Return ONLY JSON: {"items":[{"comment":"the review comment, verbatim or trimmed","draftResponse":"the drafted starting point"}]}`
-    const responseResult = await askGroq(
-      responsePrompt,
-      'You help authors draft response letters to peer review. Never invent results or experiments. Respond with valid JSON only.',
-      2200
-    )
-    responseLetterSkeleton = parseResponseLetter(responseResult?.items)
-  }
+          const responseResult = await askGroq(
+            responsePrompt,
+            'You help authors draft response letters to peer review. Never invent results or experiments. Respond with valid JSON only.',
+            2200
+          )
+          responseLetterSkeleton = parseResponseLetter(responseResult?.items)
+        }
+        emit({ type: 'progress', step: 'response-letter', status: 'completed' })
 
-  return NextResponse.json({
-    schemaVersion: 3,
-    document: {
-      reviewedCharacters: document.text.length,
-      sanitization: {
-        removedLineCount: sanitized.removedLineCount,
-        removedCharacterCount: sanitized.removedCharacterCount,
-      },
+        const references = await referencesPromise
+        emit({ type: 'progress', step: 'references', status: 'completed' })
+
+        emit({
+          type: 'result',
+          schemaVersion: 3,
+          document: {
+            reviewedCharacters: document.text.length,
+            sanitization: {
+              removedLineCount: sanitized.removedLineCount,
+              removedCharacterCount: sanitized.removedCharacterCount,
+            },
+          },
+          venue: { name: venueName, url: venueUrl || null, criteria: venueCriteria, focus: venueFocus },
+          agents,
+          references,
+          disagreements,
+          revisionRoadmap,
+          responseLetterSkeleton,
+          final: {
+            scores: finalScores,
+            consensus,
+            metaReview,
+            decisionLetter,
+            reviewerCount: available.length,
+            grounding: summarizeGrounding(allClaims),
+            selfConsistency: { reviewerCount: available.length, nonRecurringClaimCount },
+          },
+        })
+      } catch (error) {
+        console.error('Error running peer review:', error)
+        emit({ type: 'error', error: 'Unexpected error while running the review.' })
+      } finally {
+        controller.close()
+      }
     },
-    venue: { name: venueName, url: venueUrl || null, criteria: venueCriteria, focus: venueFocus },
-    agents,
-    references: await referencesPromise,
-    disagreements,
-    revisionRoadmap,
-    responseLetterSkeleton,
-    final: {
-      scores: finalScores,
-      consensus,
-      metaReview,
-      decisionLetter,
-      reviewerCount: available.length,
-      grounding: summarizeGrounding(allClaims),
-      selfConsistency: { reviewerCount: available.length, nonRecurringClaimCount },
+  })
+
+  return new NextResponse(stream, {
+    headers: {
+      'Content-Type': 'application/x-ndjson; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
+      'Cache-Control': 'no-cache',
     },
   })
 }
