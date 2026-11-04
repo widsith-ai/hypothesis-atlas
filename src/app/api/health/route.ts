@@ -11,6 +11,8 @@ export async function GET() {
       DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT_SET',
       REDIS_URL: process.env.REDIS_URL ? 'SET' : 'NOT_SET',
       GROQ_API_KEY: process.env.GROQ_API_KEY ? 'SET' : 'NOT_SET',
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT_SET',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'SET' : 'NOT_SET',
     }
 
     return NextResponse.json({

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
+import { getActiveLLMConfig, hasChosenDefaultModel, openModelKeyDialog } from "@/lib/llmClientConfig";
 import InkLandscape, { type InkVariant } from "@/components/ink/InkLandscape";
 import InkSeal from "@/components/ink/InkSeal";
 import Enso from "@/components/ink/Enso";
@@ -252,10 +253,19 @@ export default function Home() {
   // Every "Explorer" entry point on the landing page requires an account.
   // Signed out → cancel the navigation and open the sign-in modal (AuthWidget
   // listens for this event) instead of letting the link through to /explore.
+  //
+  // #88: signed in but no model key of their own in this browser → open the
+  // Model & API key dialog first; saving a key (or choosing the server's
+  // default model, when it has one) continues on to /explore.
   const requireSignInForExplorer = (e: React.MouseEvent) => {
-    if (authStatus === "authenticated") return;
+    if (authStatus !== "authenticated") {
+      e.preventDefault();
+      window.dispatchEvent(new Event("atlas:open-signin"));
+      return;
+    }
+    if (getActiveLLMConfig() || hasChosenDefaultModel()) return;
     e.preventDefault();
-    window.dispatchEvent(new Event("atlas:open-signin"));
+    openModelKeyDialog({ continueTo: "/explore" });
   };
 
   useEffect(() => {

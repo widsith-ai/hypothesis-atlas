@@ -1,4 +1,9 @@
 import Groq from 'groq-sdk'
+// #88/V4.8.1: the helpers below resolve their client per request through
+// getLLM() — the user's own key when the browser sent one, otherwise the
+// server client defined in this file (unchanged). Circular import is safe:
+// neither module touches the other at evaluation time.
+import { getLLM, redactSecrets } from './llm'
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 
@@ -17,12 +22,13 @@ if (GROQ_API_KEY) {
 // caller that records the seed in a run log gets a call that's actually
 // replayable with it, not just a number logged alongside an unrelated call.
 export async function generateWithGroq(prompt: string, schema?: any, systemPrompt?: string, seed?: number): Promise<any> {
-  if (!groq) {
+  const llm = getLLM()
+  if (!llm) {
     return generateFallback(prompt, schema)
   }
 
   try {
-    const completion = await groq.chat.completions.create({
+    const completion = await llm.client.chat.completions.create({
       messages: [
         {
           role: 'system',
@@ -33,7 +39,7 @@ export async function generateWithGroq(prompt: string, schema?: any, systemPromp
           content: prompt,
         },
       ],
-      model: GROQ_MODEL,
+      model: llm.model,
       temperature: 0.3,
       max_tokens: 2000,
       ...(seed !== undefined ? { seed } : {}),
@@ -68,9 +74,10 @@ export async function streamGroqChat(
   messages: ChatMessage[],
   systemPrompt: string
 ): Promise<ReadableStream<Uint8Array> | null> {
-  if (!groq || messages.length === 0) return null
+  const llm = getLLM()
+  if (!llm || messages.length === 0) return null
 
-  const client = groq
+  const client = llm.client
   const encoder = new TextEncoder()
 
   return new ReadableStream({
@@ -81,7 +88,7 @@ export async function streamGroqChat(
             { role: 'system', content: systemPrompt },
             ...messages,
           ],
-          model: GROQ_MODEL,
+          model: llm.model,
           temperature: 0.4,
           max_tokens: 3000,
           stream: true,
@@ -92,7 +99,7 @@ export async function streamGroqChat(
           if (delta) controller.enqueue(encoder.encode(delta))
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Stream error'
+        const msg = redactSecrets(err instanceof Error ? err.message : 'Stream error')
         controller.enqueue(encoder.encode(`\n\n[Error: ${msg}]`))
       } finally {
         controller.close()

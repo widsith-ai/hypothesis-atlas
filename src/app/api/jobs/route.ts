@@ -105,6 +105,14 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating job:', error)
     console.error('Stack:', error instanceof Error ? error.stack : 'No stack')
+    // Prisma can't connect (DB container down, wrong DATABASE_URL): say so,
+    // rather than a generic failure the user can't act on.
+    if (error instanceof Error && error.name === 'PrismaClientInitializationError') {
+      return NextResponse.json(
+        { error: "Couldn't start the run: the database is unavailable. Please try again shortly." },
+        { status: 503 }
+      )
+    }
     return NextResponse.json(
       { error: 'Failed to create job' },
       { status: 500 }

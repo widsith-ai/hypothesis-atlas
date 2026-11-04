@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { anthropic, ANTHROPIC_MODEL } from '@/lib/anthropic'
+import { getLLMPreferringServerAnthropic } from '@/lib/llm'
 
 interface KnowledgeNodeRow {
   nodeId: string
@@ -57,8 +57,10 @@ export async function POST(
     const typedA = sourceA as unknown as SourceWithNodes
     const typedB = sourceB as unknown as SourceWithNodes
 
-    // If anthropic client is available, use Claude for comparison
-    if (anthropic) {
+    // #88: the user's own key (any provider) if sent, else the server's
+    // Anthropic key as before, else the non-LLM fallback below.
+    const llm = getLLMPreferringServerAnthropic()
+    if (llm) {
       const knowledgeAreasA = typedA.nodeSources
         .map((ns: KnowledgeNodeRow) => ns.node.label)
         .join(', ') || 'N/A'
@@ -95,15 +97,16 @@ Produce EXACTLY this JSON structure (no markdown, no explanation outside JSON):
   }
 }`
 
-      const response = await anthropic.messages.create({
-        model: ANTHROPIC_MODEL,
+      const response = await llm.client.chat.completions.create({
+        model: llm.model,
         max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
       })
 
-      const rawText =
-        response.content[0]?.type === 'text' ? response.content[0].text : ''
+      const rawText = response.choices[0]?.message?.content ?? ''
 
       // Strip potential markdown fences
       const jsonText = rawText

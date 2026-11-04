@@ -5,6 +5,7 @@ import "./globals.css";
 import "./paint.css";
 import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 import AuthWidget from "@/components/AuthWidget";
+import { ModelKeyDialogHost } from "@/components/ModelKeySettings";
 import { ART_STYLE_INIT_SCRIPT, DEFAULT_ART_STYLE } from "@/lib/artStyle";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -33,6 +34,8 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} ${inter.variable} ${display.variable} ${brush.variable}`} suppressHydrationWarning>
         <SessionProviderWrapper>
+          {/* #88: first, so the fetch bridge is installed before page effects run. */}
+          <ModelKeyDialogHost />
           <AuthWidget />
           {children}
         </SessionProviderWrapper>
