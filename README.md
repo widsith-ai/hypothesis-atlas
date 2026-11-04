@@ -52,6 +52,8 @@ It's free, self-hostable, and **AGPL-3.0**. Bring your own model key (Claude, Op
 
 ## 🧭 Features
 
+Everything below ships in **Hypothesis Atlas 1.0**.
+
 <table>
   <tr>
     <td width="50%" valign="top">
@@ -60,7 +62,7 @@ It's free, self-hostable, and **AGPL-3.0**. Bring your own model key (Claude, Op
     </td>
     <td width="50%" valign="top">
       <h4>🧠 Persistent Research Graph</h4>
-      Every completed run syncs topics, hypotheses, methods, evidence, gaps, outcomes and datasets into one workspace-isolated graph with full editing, provenance and cross-run Q&amp;A.
+      Every completed run syncs topics, hypotheses, methods, evidence, gaps, outcomes and datasets into one workspace-isolated graph with full editing, cross-run Q&amp;A, and a step-by-step provenance log for every run.
     </td>
   </tr>
   <tr>
@@ -75,8 +77,8 @@ It's free, self-hostable, and **AGPL-3.0**. Bring your own model key (Claude, Op
   </tr>
   <tr>
     <td valign="top">
-      <h4>💬 Workspace &amp; notebook</h4>
-      A chat-first workspace with the graph, experiments, paper map, notebook and review alongside it. Brainstorm with a streaming copilot and converge on your top three ideas.
+      <h4>💬 Workspace, notebook &amp; notes</h4>
+      A chat-first workspace with the graph, experiments, paper map, notebook and review alongside it. Write in a Markdown notebook with an AI copilot, keep session notes, and converge on your top three ideas.
     </td>
     <td valign="top">
       <h4>🔑 Bring your own model key</h4>
@@ -91,6 +93,16 @@ It's free, self-hostable, and **AGPL-3.0**. Bring your own model key (Claude, Op
     <td valign="top">
       <h4>🎨 Monet &amp; ink-wash styles</h4>
       Impressionist paintings by default (Water Lilies, The Footbridge, Impression, Sunrise), or switch to ink wash. Both palettes keep the same lightness, so text stays equally readable.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>💡 Bold Idea</h4>
+      Type any idea, however unconventional. Agents propose research directions, find papers for each, and a <b>second model critiques them</b> as well-supported, speculative or contradicted, then you design an experiment for the direction you like.
+    </td>
+    <td valign="top">
+      <h4>🎓 Learn as you go</h4>
+      Ask <b>Question Cat</b> anything about a run, or switch it to quiz mode. Every knowledge-tree node has its own quiz, and the paper pipeline can test your understanding of the whole run.
     </td>
   </tr>
 </table>
@@ -152,6 +164,29 @@ It's free, self-hostable, and **AGPL-3.0**. Bring your own model key (Claude, Op
 - A live progress view shows which reviewer is running
 - The verdict: averaged 1–10 scores (novelty, soundness, clarity, significance, overall), a consensus recommendation and an editor-style meta-review, plus each reviewer's strengths, weaknesses and questions
 - Download the completed review as a report
+
+</details>
+
+<details>
+<summary><b>Bold Idea, in detail</b></summary>
+
+- A free-text entry point (**Try Something Bold** on Explorer): no topic list or domain picker
+- The idea is tagged with its subjects (which can span several fields), then an explorer agent proposes candidate research directions
+- Each direction gets its own literature search, with a method, summary and gap extracted per paper
+- An **independent critic from a different model** gives each direction a verdict (well-supported, speculative or contradicted) and writes an overall synthesis: a summary, the biggest gap, and next steps
+- Chat about the idea, save highlights as knowledge, and **design an experiment** for any direction
+- Ideas started anonymously can be claimed once you sign in; find them later under My Research → Bold Idea
+
+</details>
+
+<details>
+<summary><b>Notebook, notes &amp; learning tools, in detail</b></summary>
+
+- **Notebook**: multi-page Markdown with math (KaTeX) rendering, an AI copilot that suggests topics from your conversation, candidate topics to explore next, and **Converge to Top 3** research ideas, exportable as Markdown
+- **Session notes**: a session-memory card for each run; ask the assistant to "remember" something and it's saved as a note in the Research Graph
+- **Question Cat**: a run's own assistant that answers questions about the topic, the evidence and the papers in the tree, and can switch to a quick quiz
+- **Node quizzes**: test yourself on any knowledge-tree node's methods and findings
+- **Test Your Understanding**: multiple-choice questions on the paper page, drawn only from the run's knowledge tree (its methods and findings)
 
 </details>
 
@@ -317,7 +352,7 @@ Atlas's review and planning are original implementations. The projects below inf
 
 | Project | What it informed | License |
 |---|---|---|
-| Academic Research Skills (Cheng-I Wu) | Earlier paper-planning integration (V2), replaced by Atlas Plan in V3.0.0.1 | CC-BY-NC 4.0 |
+| Academic Research Skills (Cheng-I Wu) | Paper-planning design; Atlas Plan is an original implementation | CC-BY-NC 4.0 |
 | [poldrack/ai-peer-review](https://github.com/poldrack/ai-peer-review) | Multiple independent reviewers plus a meta-review | MIT |
 | [FanBroWell/AI-paper-reviewer](https://github.com/FanBroWell/AI-paper-reviewer) | Pre-submission checks on claims, experiments and citations | MIT |
 | [JShi12/AI-literature-review-assistant](https://github.com/JShi12/AI-literature-review-assistant) | Citations tied to source passages | MIT |
@@ -328,21 +363,13 @@ Atlas's review and planning are original implementations. The projects below inf
 
 If code is ever copied from an MIT or Apache project, its license notice will be listed in `THIRD_PARTY_NOTICES.md`.
 
-<details>
-<summary><b>Demo videos from earlier versions</b></summary>
-
-- [V1: Evidence mapping and the knowledge tree](https://youtu.be/5io6ZrWCPIw)
-- [V2: The paper pipeline](https://youtu.be/V8uTbUVssmI)
-
-</details>
-
 ## 📜 License & support
 
 **Hypothesis Atlas is free and open source** under the [GNU AGPL-3.0](LICENSE). Use it, self-host it, change it. If you offer a modified version as a network service, AGPL-3.0 asks you to share that version's source with its users.
 
 **Working with us.** For a **research collaboration**, an **enterprise or on-premises deployment**, or a **[commercial license](COMMERCIAL-LICENSE.md)** without AGPL's source-sharing obligations, email **[hello@hypothesisatlas.com](mailto:hello@hypothesisatlas.com)**. The hosted product is developed separately.
 
-- Releases before the `v3.2.0` tag remain MIT-licensed. Releases before `V3.0.0.1` keep their Academic Research Skills attribution (CC-BY-NC 4.0) for that integrated code.
+- Pre-1.0 development releases are kept on the [`version-history`](https://github.com/widsith-ai/hypothesis-atlas/tree/version-history) branch, under the licenses they were published with (MIT before `v3.2.0`; Academic Research Skills attribution, CC-BY-NC 4.0, where that code was integrated).
 - `ee/` is reserved for source-available enterprise modules under the [Widsith Enterprise License](ee/LICENSE.md) (draft). The core outside `ee/` stays AGPL-3.0, and core features will never move behind a paywall.
 
 ## 🤝 Contributing
