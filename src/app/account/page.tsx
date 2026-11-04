@@ -4,6 +4,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import ModelKeySettings from "@/components/ModelKeySettings";
+import AccountSlot from "@/components/AccountSlot";
 
 interface Account {
   id: string;
@@ -67,9 +69,12 @@ export default function AccountPage() {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900">My Account</h1>
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-800">
-            ← Back home
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-sm text-gray-500 hover:text-gray-800">
+              ← Back home
+            </Link>
+            <AccountSlot />
+          </div>
         </div>
       </header>
 
@@ -307,6 +312,13 @@ function SettingsTab({ account, onUpdated }: { account: Account; onUpdated: (a: 
           </p>
         )}
       </form>
+
+      {/* #88/V4.8.1: bring your own model key. Browser-held, not saved to the account. */}
+      <section className="bg-white rounded-2xl border border-gray-200 p-6">
+        <h2 className="text-sm font-bold text-gray-900 mb-1">Model &amp; API key</h2>
+        <p className="text-xs text-gray-500 mb-4">Run Atlas&apos;s AI features on your own provider account instead of the server&apos;s.</p>
+        <ModelKeySettings />
+      </section>
     </div>
   );
 }

@@ -78,7 +78,7 @@ export default function QuestionBot({ jobId, topic }: QuestionBotProps) {
           const updated = [...prev];
           updated[assistantIndex] = {
             role: "assistant",
-            content: "Hmm, I couldn't reach my brain. Check GROQ_API_KEY and try again.",
+            content: "Hmm, I couldn't reach my brain. Add your own model key under \"Model & API key\" (top-right), or check the server's GROQ_API_KEY.",
           };
           return updated;
         });

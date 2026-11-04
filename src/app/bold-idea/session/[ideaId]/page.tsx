@@ -7,6 +7,7 @@ import AssistantChat from "@/components/AssistantChat";
 import ChatMarkdown from "@/components/ChatMarkdown";
 import type { CandidateVerdict, CriticVerdict, ExperimentDesign, PaperAnalysis, BoldIdeaAgentTrace } from "@/lib/boldIdeaAgents";
 import type { Highlight } from "@/lib/boldIdeaKnowledge";
+import AccountSlot from "@/components/AccountSlot";
 
 interface BoldIdeaDetail {
   id: string;
@@ -206,7 +207,7 @@ export default function BoldIdeaSessionPage({ params }: { params: { ideaId: stri
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-      <header className="flex-shrink-0 h-14 px-4 sm:px-6 flex items-center justify-between border-b border-gray-200 bg-white z-10">
+      <header className="flex-shrink-0 h-14 px-4 sm:px-6 flex items-center justify-between border-b border-gray-200 bg-white relative z-30">
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/jobs"
@@ -244,6 +245,7 @@ export default function BoldIdeaSessionPage({ params }: { params: { ideaId: stri
           >
             + New Bold Idea
           </Link>
+          <AccountSlot />
         </div>
       </header>
 

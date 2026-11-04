@@ -1,5 +1,6 @@
 import type { Config } from 'tailwindcss'
-import { familyMap, paper, inkBlack } from './src/lib/inkPalette'
+import plugin from 'tailwindcss/plugin'
+import { tailwindColors, paletteBase } from './src/lib/palette'
 
 const config: Config = {
   content: [
@@ -9,12 +10,11 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      // Ink-wash palette: every built-in color family is remapped onto a
-      // traditional pigment — see src/lib/inkPalette.ts.
+      // Every built-in color family is remapped onto a pigment palette, held in
+      // CSS variables so it follows the art style (Monet by default, ink-wash
+      // under [data-style="ink"]) — see src/lib/palette.ts.
       colors: {
-        ...familyMap,
-        white: paper,
-        black: inkBlack,
+        ...tailwindColors,
         border: 'hsl(var(--border))',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
@@ -45,6 +45,6 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [plugin(({ addBase }) => addBase(paletteBase))],
 }
 export default config

@@ -173,7 +173,7 @@ export default function AtlasPlan({ jobId, topicQuery, selectedIdea, referenceDo
         return;
       }
       if (!data.plan.available) {
-        setError("Planning assistant unavailable — GROQ_API_KEY is not configured.");
+        setError("Planning assistant unavailable — no model key. Add your own under \"Model & API key\" (top-right), or set GROQ_API_KEY on the server.");
         return;
       }
       save(data.plan, requestedMode);

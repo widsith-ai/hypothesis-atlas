@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { groq } from '@/lib/groq'
+import { getLLM, hasLLM, LLM_NOT_CONFIGURED_MESSAGE } from '@/lib/llm'
 import {
   applySelfConsistency,
   createPaperDocument,
@@ -151,10 +151,11 @@ focus: up to 3 things this venue appears to weight most heavily.`
 }
 
 async function askGroq(prompt: string, system: string, maxTokens = 2500): Promise<Record<string, unknown> | null> {
-  if (!groq) return null
+  const llm = getLLM()
+  if (!llm) return null
   try {
-    const completion = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+    const completion = await llm.client.chat.completions.create({
+      model: llm.model,
       temperature: 0.3,
       max_tokens: maxTokens,
       messages: [
@@ -252,9 +253,9 @@ type ReviewStreamEvent =
   | { type: 'result'; [key: string]: unknown }
 
 export async function POST(request: NextRequest) {
-  if (!groq) {
+  if (!hasLLM()) {
     return NextResponse.json(
-      { error: 'GROQ_API_KEY is not configured. Add it to your .env.local file.' },
+      { error: LLM_NOT_CONFIGURED_MESSAGE },
       { status: 503 }
     )
   }

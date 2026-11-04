@@ -22,6 +22,7 @@ interface ResearchIdea {
 }
 
 import { Suspense } from "react";
+import AccountSlot from "@/components/AccountSlot";
 
 function PaperPipelineInner() {
   const params = useParams();
@@ -318,8 +319,8 @@ function PaperPipelineInner() {
     <div className="min-h-screen ink-paper">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-3">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Link
               href={`/job/${jobId}`}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors border border-gray-200"
@@ -358,7 +359,10 @@ function PaperPipelineInner() {
               Ideas & Notebook
             </Link>
           </div>
-          <p className="text-xs text-gray-400 truncate max-w-xs">{topicQuery}</p>
+          <div className="flex items-center gap-3 min-w-0">
+            <p className="text-xs text-gray-400 truncate max-w-xs">{topicQuery}</p>
+            <AccountSlot />
+          </div>
         </div>
       </header>
 

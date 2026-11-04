@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { requestPasswordReset, signInWithPassword, signUpAndSignIn } from "@/lib/credentialsAuth";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -48,28 +48,15 @@ export default function AuthModal({
 
     try {
       if (mode === "forgot") {
-        // No password-reset flow exists yet (phase 1 of #36 is login/signup
-        // only) — say so plainly rather than faking a "link sent" success.
-        setError("Password reset isn't available yet. Please sign in with your existing password for now.");
+        const reset = await requestPasswordReset(email);
+        if (reset.ok) setMessage(reset.message ?? "");
+        else setError(reset.error);
         return;
       }
 
-      if (mode === "signup") {
-        const res = await fetch("/api/auth/signup", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, email, password }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setError(data.error ?? "Could not create your account.");
-          return;
-        }
-      }
-
-      const result = await signIn("credentials", { email, password, redirect: false });
-      if (result?.error) {
-        setError(mode === "signup" ? "Account created, but sign-in failed — try signing in." : "Incorrect email or password.");
+      const result = mode === "signup" ? await signUpAndSignIn(name, email, password) : await signInWithPassword(email, password);
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
 
@@ -79,8 +66,6 @@ export default function AuthModal({
         onClose();
         reset();
       }, 800);
-    } catch {
-      setError("Could not reach the server — please try again.");
     } finally {
       setLoading(false);
     }

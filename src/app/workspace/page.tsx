@@ -5,6 +5,7 @@ import Link from "next/link";
 import InkSeal from "@/components/ink/InkSeal";
 import AssistantChat from "@/components/AssistantChat";
 import SidebarPanelHost from "@/components/SidebarPanelHost";
+import AccountSlot from "@/components/AccountSlot";
 
 type Theme = "dark" | "light" | "vibrant";
 
@@ -76,6 +77,7 @@ export default function WorkspacePage() {
           <Link href="/jobs" className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${t.navLink}`}>
             My Research
           </Link>
+          <AccountSlot className="ml-1" />
         </div>
       </nav>
 

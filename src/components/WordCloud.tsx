@@ -106,7 +106,7 @@ export default function WordCloudComponent({
       const span = document.createElement("span");
       span.textContent = centerWord;
       span.style.fontSize = "42px";
-      span.style.color = "#455c68";
+      span.style.color = "var(--wc-center)";
       span.style.cursor = "pointer";
       span.style.position = "absolute";
       span.style.fontWeight = "800";
@@ -160,16 +160,10 @@ export default function WordCloudComponent({
         ((word.value - minValue) / (maxValue - minValue)) * 28 + 16;
       span.style.fontSize = `${normalizedSize}px`;
 
-      const colorPalette = [
-        "rgb(88, 115, 128)",
-        "rgb(95, 78, 86)",
-        "rgb(181, 74, 51)",
-        "rgb(76, 119, 124)",
-        "rgb(118, 98, 107)",
-        "rgb(168, 119, 50)",
-        "rgb(86, 125, 94)",
-        "rgb(156, 58, 38)",
-      ];
+      // Palette variables (src/lib/palette.ts), so the cloud follows the art
+      // style; src/app/paint.css lightens them on the Monet night scene (#90).
+      // Under ink these are the same pigments the cloud always used.
+      const colorPalette = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `var(--wc-${n})`);
       span.style.color = colorPalette[index % colorPalette.length];
 
       span.style.cursor = "pointer";

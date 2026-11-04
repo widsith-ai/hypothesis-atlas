@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import pdfParse from 'pdf-parse/lib/pdf-parse.js'
 import { prisma } from '@/lib/prisma'
-import { groq } from '@/lib/groq'
+import { getLLM } from '@/lib/llm'
 import { populateNeo4jGraph } from '@/lib/neo4j-paper-graph'
 import { syncJobGraph } from '@/lib/research-graph'
 import { getServerSession } from 'next-auth'
@@ -36,7 +36,8 @@ async function extractPaperInsight(text: string, fallbackTitle: string) {
     subtopics: [] as { label: string; summary: string; findings: string[] }[],
   }
 
-  if (!groq) return empty
+  const llm = getLLM()
+  if (!llm) return empty
 
   const prompt = `Analyze this academic paper and return a JSON object with exactly these fields:
 {
@@ -57,7 +58,7 @@ ${text.slice(0, MAX_CHARS)}${text.length > MAX_CHARS ? '\n… [truncated]' : ''}
 === PAPER END ===`
 
   try {
-    const completion = await groq.chat.completions.create({
+    const completion = await llm.client.chat.completions.create({
       messages: [
         {
           role: 'system',
@@ -66,7 +67,7 @@ ${text.slice(0, MAX_CHARS)}${text.length > MAX_CHARS ? '\n… [truncated]' : ''}
         },
         { role: 'user', content: prompt },
       ],
-      model: 'openai/gpt-oss-120b',
+      model: llm.model,
       temperature: 0.3,
       max_tokens: 3000,
     })

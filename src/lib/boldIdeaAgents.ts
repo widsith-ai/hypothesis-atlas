@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { groq } from './groq'
+import { getLLM } from './llm'
 import { openai, OPENAI_MODEL } from './openai'
 import { fetchTopicPapers, type FetchedPaper } from './fetchTopicPapers'
 
@@ -89,10 +89,11 @@ const MAX_PAPERS_TO_ANALYZE = 10
 
 /** Explorer agent (Groq): idea exploration — candidate research directions, not literature-grounded yet. */
 async function explore(text: string, tags: string[]): Promise<AgentCandidate[]> {
-  if (!groq) return []
+  const llm = getLLM()
+  if (!llm) return []
   try {
-    const completion = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+    const completion = await llm.client.chat.completions.create({
+      model: llm.model,
       temperature: 0.4,
       max_tokens: 500,
       messages: [
@@ -246,7 +247,8 @@ async function analyzePapers(candidates: GroundedCandidate[]): Promise<PaperAnal
   }
   const papers = Array.from(byUrl.values()).slice(0, MAX_PAPERS_TO_ANALYZE)
   if (papers.length === 0) return []
-  if (!groq) {
+  const llm = getLLM()
+  if (!llm) {
     return papers.map((p) => ({
       title: p.title,
       url: p.url,
@@ -262,8 +264,8 @@ async function analyzePapers(candidates: GroundedCandidate[]): Promise<PaperAnal
     const paperBlock = papers
       .map((p, i) => `${i + 1}. "${p.title}" (${p.year})\nAbstract: ${(p.abstract ?? 'No abstract available.').slice(0, 600)}`)
       .join('\n\n')
-    const completion = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+    const completion = await llm.client.chat.completions.create({
+      model: llm.model,
       temperature: 0.1,
       max_tokens: 1500,
       messages: [
@@ -389,7 +391,8 @@ export interface ExperimentDesign {
 export async function generateExperiment(ideaText: string, candidate: CandidateVerdict): Promise<ExperimentDesign> {
   const fallbackMarkdown =
     `## Hypothesis\nExperiment design is unavailable right now (Groq is unreachable). Try again shortly.`
-  if (!groq) return { candidateTitle: candidate.title, markdown: fallbackMarkdown }
+  const llm = getLLM()
+  if (!llm) return { candidateTitle: candidate.title, markdown: fallbackMarkdown }
 
   try {
     // Candidates from before CandidateVerdict carried a `papers` field (see
@@ -400,8 +403,8 @@ export async function generateExperiment(ideaText: string, candidate: CandidateV
         ? papers.map((p) => `- "${p.title}" (${p.year}) — Method: ${p.method}; Gap: ${p.gap}`).join('\n')
         : 'None found during information-finding.'
 
-    const completion = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+    const completion = await llm.client.chat.completions.create({
+      model: llm.model,
       temperature: 0.3,
       max_tokens: 1500,
       messages: [

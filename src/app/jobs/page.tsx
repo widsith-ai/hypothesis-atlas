@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import AccountSlot from "@/components/AccountSlot";
 
 interface Job {
   id: string;
@@ -125,12 +126,15 @@ export default function JobsPage() {
             <span className="text-gray-300">|</span>
             <h1 className="font-bold text-gray-900">My Research</h1>
           </div>
-          <Link
-            href="/explore"
-            className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all"
-          >
-            + New Topic
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/explore"
+              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all"
+            >
+              + New Topic
+            </Link>
+            <AccountSlot />
+          </div>
         </div>
       </header>
 

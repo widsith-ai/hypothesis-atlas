@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { groq } from '@/lib/groq'
+import { getLLM, hasLLM, LLM_NOT_CONFIGURED_MESSAGE } from '@/lib/llm'
 import { create, all } from 'mathjs'
 
 const math = create(all)
@@ -43,9 +43,11 @@ function closeEnough(a: number, b: number): boolean {
 }
 
 async function extractClaims(transcript: string): Promise<RawClaim[]> {
+  const llm = getLLM()
+  if (!llm) return []
   for (let attempt = 0; attempt < 2; attempt++) {
-    const extraction = await groq!.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+    const extraction = await llm.client.chat.completions.create({
+      model: llm.model,
       temperature: 0,
       max_tokens: 1200,
       messages: [
@@ -78,9 +80,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  if (!groq) {
+  if (!hasLLM()) {
     return NextResponse.json(
-      { error: 'GROQ_API_KEY is not configured. Add it to your .env.local file.' },
+      { error: LLM_NOT_CONFIGURED_MESSAGE },
       { status: 503 }
     )
   }

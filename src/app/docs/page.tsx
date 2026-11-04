@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import InkSeal from "@/components/ink/InkSeal";
+import AccountSlot from "@/components/AccountSlot";
 
 type Theme = "dark" | "light" | "vibrant";
 
@@ -125,8 +126,8 @@ const faq: { q: string; a: string }[] = [
     a: "Deploy the web app to Vercel with DATABASE_URL, REDIS_URL, and GROQ_API_KEY set. Deploy the worker to Railway or Render using `npm run worker`.",
   },
   {
-    q: "What does $1 per round mean?",
-    a: "When running on our hosted server each evidence-mapping execution is priced at $1. Self-hosted usage is completely free under the MIT license.",
+    q: "How much does it cost?",
+    a: "Self-hosting is free under the AGPL-3.0 license, with no limits. For collaboration, enterprise or on-premises deployment, or a commercial license, email hello@hypothesisatlas.com.",
   },
   {
     q: "Where are papers fetched from?",
@@ -228,7 +229,7 @@ const sections = [
   { id: "deploy", label: "Deployment" },
   { id: "troubleshoot", label: "Troubleshooting" },
   { id: "faq", label: "FAQ" },
-  { id: "pricing", label: "Pricing" },
+  { id: "license", label: "License & support" },
   { id: "acknowledgments", label: "Acknowledgments" },
 ];
 
@@ -260,7 +261,7 @@ export default function DocsPage() {
       <header
         className={`sticky top-0 z-30 ${t.header} backdrop-blur border-b transition-colors duration-500`}
       >
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 min-h-14 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-3">
             <Link href="/" className={`flex items-center gap-2 font-display text-xl font-semibold transition-colors ${t.brand}`}>
               <InkSeal text="HA" size={24} />
@@ -284,6 +285,7 @@ export default function DocsPage() {
             >
               Home
             </Link>
+            <AccountSlot className="ml-1" />
           </div>
         </div>
       </header>
@@ -689,42 +691,22 @@ export default function DocsPage() {
             </div>
           </section>
 
-          {/* Pricing */}
-          <section id="pricing">
-            <h2 className="text-3xl font-bold text-zinc-900 mb-2">Pricing</h2>
-            <div className="bg-white border border-zinc-200 rounded-xl p-6">
-              <div className="flex flex-col sm:flex-row gap-6">
-                <div className="flex-1 border border-zinc-200 rounded-xl p-5">
-                  <p className="text-lg font-bold text-zinc-900 mb-1">
-                    Self-hosted
-                  </p>
-                  <p className="text-3xl font-extrabold text-zinc-900">Free</p>
-                  <p className="text-sm text-zinc-500 mt-2">
-                    Run on your own hardware under the MIT license. No limits.
-                  </p>
-                </div>
-                <div className="flex-1 border-2 border-indigo-500 rounded-xl p-5 bg-indigo-50/50">
-                  <p className="text-lg font-bold text-indigo-900 mb-1">
-                    Hosted
-                  </p>
-                  <p className="text-3xl font-extrabold text-indigo-900">
-                    $1{" "}
-                    <span className="text-base font-medium text-indigo-600">
-                      / round
-                    </span>
-                  </p>
-                  <p className="text-sm text-indigo-700 mt-2">
-                    Run directly on our server. Each evidence-mapping round
-                    costs $1.
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-zinc-400 mt-4">
-                Payment integration uses Stripe. See the{" "}
-                <Link href="/pricing" className="text-indigo-600 underline">
-                  Pricing page
-                </Link>{" "}
-                for full plan details.
+          {/* License & support (#97: hosted plans and pricing belong to the hosted product, not the open-source docs) */}
+          <section id="license">
+            <h2 className="text-3xl font-bold text-zinc-900 mb-2">License &amp; support</h2>
+            <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-3">
+              <p className="text-zinc-600">
+                Hypothesis Atlas is free and open source under the <strong>GNU AGPL-3.0</strong>. Run it on your own
+                hardware with no limits; anyone who hosts a modified version as a network service must offer its users
+                the complete source.
+              </p>
+              <p className="text-zinc-600">
+                For collaborations, enterprise or on-premises deployment, or a commercial license without copyleft
+                obligations, email{" "}
+                <a href="mailto:hello@hypothesisatlas.com" className="text-indigo-600 underline">
+                  hello@hypothesisatlas.com
+                </a>
+                .
               </p>
             </div>
           </section>

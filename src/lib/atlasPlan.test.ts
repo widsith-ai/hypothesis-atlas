@@ -4,7 +4,9 @@ const { groqMock, groundReviewClaimsMock } = vi.hoisted(() => ({
   groqMock: { chat: { completions: { create: vi.fn() } } },
   groundReviewClaimsMock: vi.fn(),
 }))
-vi.mock('@/lib/groq', () => ({ groq: groqMock }))
+// atlasPlan resolves its client through getLLM() (#88), which falls back to
+// this server client when the request carries no user key.
+vi.mock('@/lib/groq', () => ({ groq: groqMock, GROQ_MODEL: 'openai/gpt-oss-120b' }))
 vi.mock('@/lib/review-grounding', async () => {
   const actual = await vi.importActual<typeof import('@/lib/review-grounding')>('@/lib/review-grounding')
   return { ...actual, groundReviewClaims: groundReviewClaimsMock }

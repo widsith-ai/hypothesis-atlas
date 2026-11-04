@@ -2,11 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Ink-wash (水墨) theme — colors mirror src/lib/inkPalette.ts. */
+/*
+ * Two art styles (#87), picked by <html data-style> — see src/lib/artStyle.ts:
+ *   monet (default) — Impressionist paintings (public/monet/, painted by
+ *                     scripts/gen-monet-scenes.py), Monet palette
+ *   ink             — ink-wash (水墨) landscapes (public/ink/), ink palette
+ * Palette variables: src/lib/palette.ts. Component layer: src/app/paint.css.
+ */
 :root {
-  --background: 43 47% 93%;  /* xuan paper  #f5f0e4 */
-  --foreground: 30 14% 9%;   /* dense ink   #1f1c19 */
-  --border: 41 25% 84%;      /* pale wash   #e0d9ca */
+  --background: 233 50% 97%; /* primed canvas  #f3f4fa */
+  --foreground: 240 35% 15%; /* violet-black   #191934 */
+  --border: 234 14% 87%;     /* lilac grey     #d8d9e2 */
+  --page-bg: #eef0f4;
 
   /* Paper fibre: fractal noise tinted warm grey, tiled. */
   --ink-fibre: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.35 0 0 0 0 0.3 0 0 0 0 0.22 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
@@ -16,11 +23,23 @@
   --ink-scene-paper: url("/ink/scene-paper.svg");
   --ink-scene-night: url("/ink/scene-night.svg");
   --ink-scene-jade: url("/ink/scene-jade.svg");
+
+  /* Impressionist backdrops (regenerate with: python3 scripts/gen-monet-scenes.py). */
+  --monet-scene-lilies: url("/monet/water-lilies.webp");
+  --monet-scene-bridge: url("/monet/japanese-bridge.webp");
+  --monet-scene-sunrise: url("/monet/sunrise.webp");
+}
+
+:root[data-style="ink"] {
+  --background: 43 47% 93%;  /* xuan paper  #f5f0e4 */
+  --foreground: 30 14% 9%;   /* dense ink   #1f1c19 */
+  --border: 41 25% 84%;      /* pale wash   #e0d9ca */
+  --page-bg: #f5f0e4;
 }
 
 html,
 body {
-  background-color: #f5f0e4;
+  background-color: var(--page-bg);
 }
 
 body {
@@ -29,14 +48,94 @@ body {
 }
 
 /*
- * Page backgrounds. One class per theme key, so pages that use the
- * dark/light/vibrant theme tokens and pages that don't share one treatment.
+ * Page backgrounds. One class per theme key (light → .ink-paper, dark →
+ * .ink-night, vibrant → .ink-jade), so pages that use the dark/light/vibrant
+ * theme tokens and pages that don't share one treatment. The class names
+ * predate the Monet style; each now paints whichever style is active.
+ */
+
+/* ── Monet ──────────────────────────────────────────────────────────────
+ * Layers (top → bottom): canvas grain, a soft veil that keeps the centre
+ * readable, the painting. The painting is `fixed`, so content scrolls over a
+ * still canvas. */
+
+/* Water lilies — pale pond, sky reflections, lily pads. */
+:root[data-style="monet"] body,
+:root[data-style="monet"] .ink-paper {
+  background-color: #dfe6ee;
+  background-image:
+    var(--monet-canvas),
+    radial-gradient(ellipse 75% 60% at 50% 38%, rgb(251 251 248 / 0.45), rgb(251 251 248 / 0.22) 75%),
+    var(--monet-scene-lilies);
+  background-size: 180px 180px, 100% 100%, cover;
+  background-position: 0 0, 0 0, center;
+  background-repeat: repeat, no-repeat, no-repeat;
+  background-attachment: scroll, fixed, fixed;
+}
+
+/* Impression, sunrise — hazy blue harbour, orange sun, boats. */
+:root[data-style="monet"] .ink-night {
+  background-color: #1f2a38;
+  background-image:
+    var(--monet-canvas),
+    linear-gradient(rgb(17 17 22 / 0.22), rgb(17 17 22 / 0.3)),
+    var(--monet-scene-sunrise);
+  background-size: 180px 180px, 100% 100%, cover;
+  background-position: 0 0, 0 0, center;
+  background-repeat: repeat, no-repeat, no-repeat;
+  background-attachment: scroll, fixed, fixed;
+}
+
+/* The footbridge — green bridge over a lily pond, willows. */
+:root[data-style="monet"] .ink-jade {
+  background-color: #7e9c6a;
+  background-image:
+    var(--monet-canvas),
+    linear-gradient(to bottom, rgb(251 251 248 / 0.4), transparent 140px),
+    radial-gradient(ellipse 70% 58% at 50% 42%, rgb(251 251 248 / 0.6), rgb(251 251 248 / 0.3) 78%),
+    var(--monet-scene-bridge);
+  background-size: 180px 180px, 100% 100%, 100% 100%, cover;
+  background-position: 0 0, 0 0, 0 0, center;
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  background-attachment: scroll, fixed, fixed, fixed;
+}
+
+/* Working surfaces (the workspace, #78): still the painting — Monet has no
+   white backgrounds (#90) — but under a heavy veil, so it reads as a quiet
+   wash of colour behind the chat rather than a picture competing with it.
+   The workspace marks its dark/vibrant modes with ink-era arbitrary colours. */
+:root[data-style="monet"] .ink-plain {
+  background-color: #e4e9f0;
+  background-image:
+    var(--monet-canvas),
+    linear-gradient(rgb(243 244 250 / 0.72), rgb(243 244 250 / 0.72)),
+    var(--monet-scene-lilies);
+  background-size: 180px 180px, 100% 100%, cover;
+  background-position: 0 0, 0 0, center;
+  background-repeat: repeat, no-repeat, no-repeat;
+  background-attachment: scroll, fixed, fixed;
+}
+:root[data-style="monet"] .ink-plain[class~="bg-[#12100e]"] {
+  background-color: #16171d;
+  background-image:
+    var(--monet-canvas),
+    linear-gradient(rgb(17 17 34 / 0.62), rgb(17 17 34 / 0.62)),
+    var(--monet-scene-sunrise);
+}
+:root[data-style="monet"] .ink-plain[class~="bg-[#f3efe2]"] {
+  background-color: #e6ece1;
+  background-image:
+    var(--monet-canvas),
+    linear-gradient(rgb(243 246 240 / 0.74), rgb(243 246 240 / 0.74)),
+    var(--monet-scene-bridge);
+}
+
+/* ── Ink wash ───────────────────────────────────────────────────────────
  * Layers (top → bottom): paper fibre, painted landscape, ink blooms.
  * The landscape and blooms are `fixed`, so content scrolls over a still
- * painting. The scene keeps its centre empty (留白), where content sits.
- */
-body,
-.ink-paper {
+ * painting. The scene keeps its centre empty (留白), where content sits. */
+:root[data-style="ink"] body,
+:root[data-style="ink"] .ink-paper {
   background-color: #f5f0e4;
   background-image:
     var(--ink-fibre),
@@ -50,7 +149,7 @@ body,
 }
 
 /* 墨夜 — ink night: moonlit ranges in pale mist over dense ink. */
-.ink-night {
+:root[data-style="ink"] .ink-night {
   background-color: #12100e;
   background-image:
     var(--ink-fibre),
@@ -64,7 +163,7 @@ body,
 }
 
 /* 青绿山水 — blue-green landscape: mineral azurite/malachite peaks on paper. */
-.ink-jade {
+:root[data-style="ink"] .ink-jade {
   background-color: #f3efe2;
   background-image:
     var(--ink-fibre),
@@ -78,13 +177,16 @@ body,
 }
 
 /* For pages that paint their own landscape (the landing page): paper only. */
-.ink-plain {
+:root[data-style="ink"] .ink-plain {
   background-image: var(--ink-fibre);
   background-size: 240px 240px;
   background-attachment: scroll;
 }
 
 ::selection {
+  background: rgba(171, 139, 201, 0.3); /* lilac */
+}
+:root[data-style="ink"] ::selection {
   background: rgba(181, 74, 51, 0.2); /* cinnabar wash */
 }
 
@@ -146,7 +248,7 @@ input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0px 1000px #fbf8f1 inset !important; /* paper white, matches bg-white */
-  -webkit-text-fill-color: #1f1c19 !important; /* text-gray-900 (ink), to match the rest of the form */
+  -webkit-box-shadow: 0 0 0px 1000px rgb(var(--c-white)) inset !important; /* matches bg-white in either art style */
+  -webkit-text-fill-color: rgb(var(--c-gray-900)) !important; /* text-gray-900, to match the rest of the form */
   transition: background-color 9999s ease-in-out 0s; /* delays the browser's own repaint indefinitely so it never flashes back in */
 }
