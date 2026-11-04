@@ -48,9 +48,19 @@ export default function AuthModal({
 
     try {
       if (mode === "forgot") {
-        // No password-reset flow exists yet (phase 1 of #36 is login/signup
-        // only) — say so plainly rather than faking a "link sent" success.
-        setError("Password reset isn't available yet. Please sign in with your existing password for now.");
+        // Emails a one-time reset link (see /api/auth/forgot-password). The
+        // server answers the same whether or not the account exists.
+        const res = await fetch("/api/auth/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(data.error ?? "Couldn't send a reset link. Please try again.");
+          return;
+        }
+        setMessage(data.message ?? "If an account exists for that email, we've sent a reset link.");
         return;
       }
 
