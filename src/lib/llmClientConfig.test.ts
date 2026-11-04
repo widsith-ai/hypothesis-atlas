@@ -19,13 +19,12 @@ describe('shouldAttachLLMHeaders', () => {
 })
 
 describe('llmHeadersFor', () => {
-  it('sends the base URL only for the custom provider', () => {
-    expect(llmHeadersFor({ provider: 'openai', model: 'gpt-4o', apiKey: 'k', baseUrl: 'http://x' })).toEqual({
+  it('sends provider, model and key', () => {
+    expect(llmHeadersFor({ provider: 'openai', model: 'gpt-4o', apiKey: 'k' })).toEqual({
       'x-atlas-llm-provider': 'openai',
       'x-atlas-llm-model': 'gpt-4o',
       'x-atlas-llm-key': 'k',
     })
-    expect(llmHeadersFor({ provider: 'custom', model: 'm', apiKey: 'k', baseUrl: 'http://x' })['x-atlas-llm-base-url']).toBe('http://x')
   })
 })
 

@@ -22,7 +22,6 @@ import {
 
 interface ServerInfo {
   serverModel: { provider: string; model: string } | null;
-  allowCustomBaseUrl: boolean;
 }
 
 type TestState = { kind: "idle" } | { kind: "testing" } | { kind: "ok"; reply: string } | { kind: "error"; message: string };
@@ -56,7 +55,6 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
   const [provider, setProvider] = useState<LLMProviderId>("anthropic");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
   const [remember, setRemember] = useState(false);
   const [test, setTest] = useState<TestState>({ kind: "idle" });
   const [notice, setNotice] = useState("");
@@ -75,20 +73,17 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
     setProvider(active.provider);
     setModel(active.model);
     setApiKey(active.apiKey);
-    setBaseUrl(active.baseUrl ?? "");
     setRemember(active.remember);
   }, [active]);
 
   const info = getProviderInfo(provider)!;
-  const providers = LLM_PROVIDERS.filter((p) => p.id !== "custom" || server?.allowCustomBaseUrl);
   const effectiveModel = model.trim() || info.defaultModel;
-  const canSubmit = apiKey.trim().length > 0 && effectiveModel.length > 0 && (provider !== "custom" || baseUrl.trim().length > 0);
+  const canSubmit = apiKey.trim().length > 0 && effectiveModel.length > 0;
 
   const current = (): StoredLLMConfig => ({
     provider,
     model: effectiveModel,
     apiKey: apiKey.trim(),
-    baseUrl: provider === "custom" ? baseUrl.trim() : undefined,
     remember,
   });
 
@@ -125,7 +120,6 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
     clearLLMConfig();
     setApiKey("");
     setModel("");
-    setBaseUrl("");
     setRemember(false);
     setTest({ kind: "idle" });
     setNotice("Removed. AI features now use the server's model.");
@@ -147,7 +141,7 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
           onChange={(e) => changeProvider(e.target.value as LLMProviderId)}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          {providers.map((p) => (
+          {LLM_PROVIDERS.map((p) => (
             <option key={p.id} value={p.id}>
               {p.label}
             </option>
@@ -161,7 +155,7 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
           value={model}
           onChange={(e) => setModel(e.target.value)}
           list={`llm-models-${provider}`}
-          placeholder={info.defaultModel || "model name"}
+          placeholder={info.defaultModel}
           className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
         <datalist id={`llm-models-${provider}`}>
@@ -169,20 +163,9 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
             <option key={m} value={m} />
           ))}
         </datalist>
-        <span className="block text-[11px] text-gray-400 mt-1">Any model your key can use. Leave empty for {info.defaultModel || "—"}.</span>
+        <span className="block text-[11px] text-gray-400 mt-1">Any model your key can use. Leave empty for {info.defaultModel}.</span>
       </label>
 
-      {provider === "custom" && (
-        <label className="block">
-          <span className="block text-xs font-semibold text-gray-700 mb-1">Base URL</span>
-          <input
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="http://localhost:11434/v1"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-        </label>
-      )}
 
       <label className="block">
         <span className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-1">

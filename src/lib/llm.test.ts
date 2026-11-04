@@ -37,7 +37,6 @@ async function load() {
 beforeEach(() => {
   vi.clearAllMocks()
   process.env.GROQ_API_KEY = 'server-groq-key'
-  delete process.env.ALLOW_CUSTOM_LLM_BASE_URL
   delete process.env.ANTHROPIC_API_KEY
   // Default: outside a request scope, like the worker.
   headersMock.mockImplementation(() => {
@@ -77,15 +76,13 @@ describe('readUserLLMConfig', () => {
     ).toBeNull()
   })
 
-  it('rejects a custom base URL unless the server opts in', async () => {
-    const custom = { 'x-atlas-llm-provider': 'custom', 'x-atlas-llm-key': 'k', 'x-atlas-llm-model': 'llama3', 'x-atlas-llm-base-url': 'http://localhost:11434/v1' }
-    let mod = await load()
-    expect(mod.readUserLLMConfig(requestHeaders(custom))).toBeNull()
-
-    process.env.ALLOW_CUSTOM_LLM_BASE_URL = 'true'
-    mod = await load()
-    expect(mod.readUserLLMConfig(requestHeaders(custom))?.baseUrl).toBe('http://localhost:11434/v1')
-    expect(mod.readUserLLMConfig(requestHeaders({ ...custom, 'x-atlas-llm-base-url': 'file:///etc/passwd' }))).toBeNull()
+  it('has no custom provider: a user-supplied base URL is never honoured', async () => {
+    const { readUserLLMConfig } = await load()
+    expect(readUserLLMConfig(requestHeaders({ 'x-atlas-llm-provider': 'custom', 'x-atlas-llm-key': 'k', 'x-atlas-llm-model': 'llama3' }))).toBeNull()
+    const cfg = readUserLLMConfig(
+      requestHeaders({ 'x-atlas-llm-provider': 'openai', 'x-atlas-llm-key': 'k', 'x-atlas-llm-base-url': 'http://169.254.169.254/' })
+    )
+    expect(cfg).toEqual({ provider: 'openai', model: 'gpt-4o', apiKey: 'k' })
   })
 })
 

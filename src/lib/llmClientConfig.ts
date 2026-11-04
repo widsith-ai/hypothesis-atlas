@@ -51,7 +51,6 @@ export function loadLLMConfig(): StoredLLMConfig | null {
       provider: parsed.provider,
       model: parsed.model ?? "",
       apiKey: parsed.apiKey,
-      baseUrl: parsed.baseUrl,
       remember: Boolean(parsed.remember),
     };
   } catch {
@@ -119,7 +118,6 @@ export function llmHeadersFor(config: UserLLMConfig): Record<string, string> {
     [LLM_HEADERS.key]: config.apiKey,
   };
   if (config.model) h[LLM_HEADERS.model] = config.model;
-  if (config.provider === "custom" && config.baseUrl) h[LLM_HEADERS.baseUrl] = config.baseUrl;
   return h;
 }
 

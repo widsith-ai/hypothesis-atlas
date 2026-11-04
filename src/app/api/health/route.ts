@@ -13,8 +13,6 @@ export async function GET() {
       GROQ_API_KEY: process.env.GROQ_API_KEY ? 'SET' : 'NOT_SET',
       ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? 'SET' : 'NOT_SET',
       OPENAI_API_KEY: process.env.OPENAI_API_KEY ? 'SET' : 'NOT_SET',
-      // #88: whether users may point their own key at a custom base URL.
-      ALLOW_CUSTOM_LLM_BASE_URL: process.env.ALLOW_CUSTOM_LLM_BASE_URL === 'true' ? 'true' : 'false',
     }
 
     return NextResponse.json({

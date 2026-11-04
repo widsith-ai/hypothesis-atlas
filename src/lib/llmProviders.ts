@@ -23,13 +23,12 @@ export type LLMProviderId =
   | 'deepseek'
   | 'xai'
   | 'together'
-  | 'custom'
 
 export interface LLMProviderInfo {
   id: LLMProviderId
   label: string
   transport: 'openai-compatible' | 'anthropic'
-  /** Fixed endpoint for OpenAI-compatible providers. `custom` takes it from the user. */
+  /** Fixed endpoint for OpenAI-compatible providers. Users can't supply their own (SSRF). */
   baseURL?: string
   defaultModel: string
   models: string[]
@@ -128,14 +127,6 @@ export const LLM_PROVIDERS: LLMProviderInfo[] = [
     keyUrl: 'https://api.together.ai/settings/api-keys',
     keyPlaceholder: 'Together API key',
   },
-  {
-    id: 'custom',
-    label: 'Custom (OpenAI-compatible)',
-    transport: 'openai-compatible',
-    defaultModel: '',
-    models: [],
-    keyPlaceholder: 'API key (any value for local servers that ignore it)',
-  },
 ]
 
 export function getProviderInfo(id: string | null | undefined): LLMProviderInfo | null {
@@ -147,14 +138,12 @@ export const LLM_HEADERS = {
   provider: 'x-atlas-llm-provider',
   model: 'x-atlas-llm-model',
   key: 'x-atlas-llm-key',
-  baseUrl: 'x-atlas-llm-base-url',
 } as const
 
 export interface UserLLMConfig {
   provider: LLMProviderId
   model: string
   apiKey: string
-  baseUrl?: string
 }
 
 const MODEL_RE = /^[A-Za-z0-9._:/@+-]{1,128}$/
@@ -163,14 +152,10 @@ const KEY_RE = /^[\x21-\x7e]{1,512}$/ // printable ASCII, no whitespace — head
 export type ValidationResult = { ok: true; config: UserLLMConfig } | { ok: false; error: string }
 
 /**
- * Validates a config from either side. `allowCustomBaseUrl` reflects the
- * server's ALLOW_CUSTOM_LLM_BASE_URL — without it, the hosted server would
- * make requests to any URL a user types (SSRF), so `custom` is rejected.
+ * Validates a config from either side. Only the fixed providers above are
+ * accepted — the server never calls a URL the user supplied.
  */
-export function validateLLMConfig(
-  raw: { provider?: unknown; model?: unknown; apiKey?: unknown; baseUrl?: unknown },
-  allowCustomBaseUrl: boolean
-): ValidationResult {
+export function validateLLMConfig(raw: { provider?: unknown; model?: unknown; apiKey?: unknown }): ValidationResult {
   const info = getProviderInfo(typeof raw.provider === 'string' ? raw.provider : null)
   if (!info) return { ok: false, error: 'Unknown provider.' }
 
@@ -181,22 +166,7 @@ export function validateLLMConfig(
   const model = (typeof raw.model === 'string' ? raw.model.trim() : '') || info.defaultModel
   if (!MODEL_RE.test(model)) return { ok: false, error: 'Model name is empty or has unsupported characters.' }
 
-  if (info.id !== 'custom') return { ok: true, config: { provider: info.id, model, apiKey } }
-
-  if (!allowCustomBaseUrl) {
-    return { ok: false, error: 'This server does not allow custom base URLs (ALLOW_CUSTOM_LLM_BASE_URL).' }
-  }
-  const baseUrl = typeof raw.baseUrl === 'string' ? raw.baseUrl.trim() : ''
-  let parsed: URL
-  try {
-    parsed = new URL(baseUrl)
-  } catch {
-    return { ok: false, error: 'Base URL is not a valid URL.' }
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    return { ok: false, error: 'Base URL must start with http:// or https://.' }
-  }
-  return { ok: true, config: { provider: 'custom', model, apiKey, baseUrl: parsed.toString() } }
+  return { ok: true, config: { provider: info.id, model, apiKey } }
 }
 
 /** "…a1b2" — the only form of a key ever shown back to the user. */

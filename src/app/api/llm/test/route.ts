@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { NextRequest, NextResponse } from 'next/server'
-import { allowCustomBaseUrl, createUserLLMClient, redactSecrets } from '@/lib/llm'
+import { createUserLLMClient, redactSecrets } from '@/lib/llm'
 import { validateLLMConfig } from '@/lib/llmProviders'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
  */
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
-  const result = validateLLMConfig(body ?? {}, allowCustomBaseUrl())
+  const result = validateLLMConfig(body ?? {})
   if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: 400 })
 
   const { config } = result

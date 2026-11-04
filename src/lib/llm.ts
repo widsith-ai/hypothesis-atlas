@@ -68,10 +68,6 @@ export interface ResolvedLLM {
   keySource: 'user' | 'server'
 }
 
-export function allowCustomBaseUrl(): boolean {
-  return process.env.ALLOW_CUSTOM_LLM_BASE_URL === 'true'
-}
-
 type HeaderSource = { get(name: string): string | null }
 
 /** Parses the `x-atlas-llm-*` headers. Invalid or partial config → null (server path). */
@@ -80,15 +76,7 @@ export function readUserLLMConfig(h: HeaderSource | null | undefined): UserLLMCo
   const provider = h.get(LLM_HEADERS.provider)
   const apiKey = h.get(LLM_HEADERS.key)
   if (!provider || !apiKey) return null
-  const result = validateLLMConfig(
-    {
-      provider,
-      apiKey,
-      model: h.get(LLM_HEADERS.model) ?? undefined,
-      baseUrl: h.get(LLM_HEADERS.baseUrl) ?? undefined,
-    },
-    allowCustomBaseUrl()
-  )
+  const result = validateLLMConfig({ provider, apiKey, model: h.get(LLM_HEADERS.model) ?? undefined })
   return result.ok ? result.config : null
 }
 
@@ -184,7 +172,7 @@ function openAICompatibleClient(config: UserLLMConfig): LLMClient {
   const info = getProviderInfo(config.provider)
   const sdk = new OpenAI({
     apiKey: config.apiKey,
-    baseURL: config.baseUrl ?? info?.baseURL,
+    baseURL: info?.baseURL,
     maxRetries: 1,
     timeout: 55_000,
   })
