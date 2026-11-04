@@ -6,12 +6,14 @@ import { useSession } from "next-auth/react";
 import InkLandscape, { type InkVariant } from "@/components/ink/InkLandscape";
 import InkSeal from "@/components/ink/InkSeal";
 import Enso from "@/components/ink/Enso";
+import { ART_STYLES, ART_STYLE_LABEL, type ArtStyle } from "@/lib/artStyle";
+import { useArtStyle } from "@/lib/useArtStyle";
 
 type Theme = "dark" | "light" | "vibrant";
 
 const themes = {
   dark: {
-    bg: "ink-night ink-plain",
+    bg: "ink-night",
     text: "text-white",
     cardBg: "bg-zinc-900/60 backdrop-blur-[2px]",
     cardBorder: "border-zinc-800",
@@ -36,7 +38,7 @@ const themes = {
     footerText: "text-zinc-600",
   },
   light: {
-    bg: "ink-paper ink-plain",
+    bg: "ink-paper",
     text: "text-zinc-900",
     cardBg: "bg-white/70 backdrop-blur-[2px]",
     cardBorder: "border-zinc-200",
@@ -60,7 +62,7 @@ const themes = {
     footerText: "text-zinc-500",
   },
   vibrant: {
-    bg: "ink-jade ink-plain",
+    bg: "ink-jade",
     text: "text-zinc-900",
     cardBg: "bg-white/80 backdrop-blur-sm",
     cardBorder: "border-zinc-200",
@@ -100,11 +102,15 @@ const THEME_DOT: Record<Theme, string> = {
 };
 
 // Same three theme keys (other pages read them from localStorage), named for
-// the painting each one evokes.
-const THEME_LABEL: Record<Theme, string> = {
-  dark: "Ink Night",
-  light: "Xuan Paper",
-  vibrant: "Jade Hills",
+// the painting each one evokes in each art style (#87, src/lib/artStyle.ts).
+const THEME_LABEL: Record<ArtStyle, Record<Theme, string>> = {
+  monet: { dark: "Impression, Sunrise", light: "Water Lilies", vibrant: "The Footbridge" },
+  ink: { dark: "Ink Night", light: "Xuan Paper", vibrant: "Jade Hills" },
+};
+
+const STYLE_DOT: Record<ArtStyle, string> = {
+  monet: "bg-gradient-to-br from-sky-300 via-violet-300 to-pink-300 ring-1 ring-emerald-500/60",
+  ink: "bg-zinc-900 ring-1 ring-red-500/70",
 };
 
 const INK_VARIANT: Record<Theme, InkVariant> = {
@@ -113,9 +119,10 @@ const INK_VARIANT: Record<Theme, InkVariant> = {
   vibrant: "jade",
 };
 
-/** A single compact dropdown instead of three separate buttons — frees up enough width in the nav that the fixed top-right Sign In widget (src/components/AuthWidget.tsx) no longer overlaps it. */
+/** A single compact dropdown instead of separate buttons — frees up enough width in the nav that the fixed top-right Sign In widget (src/components/AuthWidget.tsx) no longer overlaps it. Two groups: the art style (Monet / Ink wash, #87) and the scene (colour mode) within it. */
 function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
+  const [artStyle, setArtStyle] = useArtStyle();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -141,7 +148,7 @@ function ThemeSwitcher() {
         }`}
       >
         <span className={`w-2.5 h-2.5 rounded-full ${THEME_DOT[theme]}`} />
-        <span className="hidden sm:inline">{THEME_LABEL[theme]}</span>
+        <span className="hidden sm:inline">{THEME_LABEL[artStyle][theme]}</span>
         <svg className={`w-3 h-3 opacity-60 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -149,10 +156,31 @@ function ThemeSwitcher() {
 
       {open && (
         <div
-          className={`absolute top-full right-0 mt-1.5 w-36 rounded-lg shadow-lg overflow-hidden z-20 ${
+          className={`absolute top-full right-0 mt-1.5 w-48 rounded-lg shadow-lg overflow-hidden z-20 ${
             theme === "dark" ? "bg-zinc-800 border border-zinc-700" : "bg-white border border-zinc-200"
           }`}
         >
+          <div className={`px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${theme === "dark" ? "text-zinc-500" : "text-zinc-400"}`}>
+            Style
+          </div>
+          {ART_STYLES.map((s) => (
+            <button
+              key={s}
+              onClick={() => setArtStyle(s)}
+              aria-pressed={artStyle === s}
+              className={`w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors ${
+                artStyle === s
+                  ? theme === "dark" ? "bg-zinc-700 text-white" : "bg-zinc-100 text-zinc-900"
+                  : theme === "dark" ? "text-zinc-300 hover:bg-zinc-700/60" : "text-zinc-600 hover:bg-zinc-50"
+              }`}
+            >
+              <span className={`w-2.5 h-2.5 rounded-full ${STYLE_DOT[s]}`} />
+              {ART_STYLE_LABEL[s]}
+            </button>
+          ))}
+          <div className={`px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] border-t ${theme === "dark" ? "text-zinc-500 border-zinc-700" : "text-zinc-400 border-zinc-200"}`}>
+            Scene
+          </div>
           {(["dark", "light", "vibrant"] as Theme[]).map((t) => (
             <button
               key={t}
@@ -164,7 +192,7 @@ function ThemeSwitcher() {
               }`}
             >
               <span className={`w-2.5 h-2.5 rounded-full ${THEME_DOT[t]}`} />
-              {THEME_LABEL[t]}
+              {THEME_LABEL[artStyle][t]}
             </button>
           ))}
         </div>
@@ -218,6 +246,7 @@ const steps = [
 
 export default function Home() {
   const [theme, setTheme] = useState<Theme>("light");
+  const [artStyle] = useArtStyle();
   const { status: authStatus } = useSession();
 
   // Every "Explorer" entry point on the landing page requires an account.
@@ -245,14 +274,18 @@ export default function Home() {
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>
       <main
-        className={`min-h-screen ${t.bg} ${t.text} overflow-hidden transition-all duration-500`}
+        className={`min-h-screen ${t.bg} ${artStyle === "ink" ? "ink-plain" : ""} ${t.text} overflow-hidden transition-all duration-500`}
       >
-        {/* The painting: nav, hero and install scroll sit over one landscape. */}
+        {/* The painting: nav, hero and install scroll sit over one landscape.
+            Ink wash paints its own landscape here (over a plain paper page);
+            Monet's painting is the page background itself (globals.css). */}
         <div className="relative">
-        <InkLandscape
-          variant={INK_VARIANT[theme]}
-          className="absolute inset-x-0 top-0 w-full h-[880px] md:h-[980px]"
-        />
+        {artStyle === "ink" && (
+          <InkLandscape
+            variant={INK_VARIANT[theme]}
+            className="absolute inset-x-0 top-0 w-full h-[880px] md:h-[980px]"
+          />
+        )}
 
         {/* Nav — extra right padding reserves room for the fixed Sign In widget (src/components/AuthWidget.tsx) in the corner, so the theme dropdown never sits underneath it. Docs/Pricing hide below sm so the row doesn't overflow into that reserved space on narrow viewports. */}
         <nav className="relative z-10 flex items-center justify-between flex-wrap gap-y-3 px-4 sm:px-6 md:px-12 py-6 pr-24 sm:pr-48 md:pr-48">
