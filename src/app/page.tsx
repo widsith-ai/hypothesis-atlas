@@ -4,7 +4,7 @@ import { sameSiteCallbackPath } from "@/lib/edition";
 
 // The open-source app opens on Explorer, the word cloud, for everyone (#97).
 // The marketing landing page and the signed-out entrance (#96) belong to the
-// hosted product and live in the private repo. A same-site ?callbackUrl= (from
+// hosted product, which is developed separately. A same-site ?callbackUrl= (from
 // a sign-in return) is honoured; anything else is ignored (no open redirect).
 export const dynamic = "force-dynamic";
 
