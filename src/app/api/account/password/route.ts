@@ -8,7 +8,7 @@ import { MIN_PASSWORD_LENGTH } from '@/lib/authValidation'
 
 const BCRYPT_ROUNDS = 12
 
-/** Changes the signed-in user's password — requires the current one, same as any normal "change password" flow (not the "forgot password" flow, which still doesn't exist — see AuthModal.tsx). */
+/** Changes the signed-in user's password — requires the current one, same as any normal "change password" flow (the "forgot password" flow is /api/auth/forgot-password + /api/auth/reset-password). */
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {

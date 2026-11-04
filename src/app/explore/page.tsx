@@ -6,130 +6,12 @@ import Link from "next/link";
 import WordCloudComponent from "@/components/WordCloud";
 import SubscribeModal from "@/components/SubscribeModal";
 import InkSeal from "@/components/ink/InkSeal";
+import AccountSlot from "@/components/AccountSlot";
+import ThemeSwitcher, { type Theme } from "@/components/ThemeSwitcher";
+import { DOMAIN_TERMS, DOMAIN_META, type Domain } from "@/lib/domainTerms";
+import { startResearchRun } from "@/lib/startResearchRun";
+import { needsModelKeyPrompt, openModelKeyDialog } from "@/lib/llmClientConfig";
 
-const DOMAIN_TERMS = {
-  bio: [
-    { text: "neural implant stability", value: 100 },
-    { text: "CRISPR-Cas9", value: 96 },
-    { text: "mRNA vaccines", value: 94 },
-    { text: "gene editing", value: 93 },
-    { text: "brain-computer interface", value: 92 },
-    { text: "AI drug discovery", value: 91 },
-    { text: "single-cell RNA-seq", value: 90 },
-    { text: "AlphaFold", value: 90 },
-    { text: "organoids", value: 82 },
-    { text: "tissue engineering", value: 83 },
-    { text: "metagenomics", value: 83 },
-    { text: "optogenetics", value: 78 },
-    { text: "nanomedicine", value: 85 },
-    { text: "immunotherapy", value: 87 },
-    { text: "liquid biopsy", value: 85 },
-    { text: "spatial transcriptomics", value: 88 },
-    { text: "systems biology", value: 82 },
-    { text: "digital pathology", value: 79 },
-    { text: "organ-on-chip", value: 87 },
-    { text: "3D bioprinting", value: 86 },
-  ],
-  chemistry: [
-    { text: "catalytic mechanisms", value: 100 },
-    { text: "polymer synthesis", value: 96 },
-    { text: "quantum chemistry", value: 94 },
-    { text: "molecular dynamics", value: 93 },
-    { text: "green chemistry", value: 92 },
-    { text: "nanomaterials", value: 91 },
-    { text: "electrochemical cells", value: 90 },
-    { text: "crystallography", value: 90 },
-    { text: "supramolecular chemistry", value: 82 },
-    { text: "photochemistry", value: 83 },
-    { text: "computational chemistry", value: 83 },
-    { text: "organic synthesis", value: 78 },
-    { text: "materials science", value: 85 },
-    { text: "chemical engineering", value: 87 },
-    { text: "analytical chemistry", value: 85 },
-    { text: "spectroscopy", value: 88 },
-    { text: "thermodynamics", value: 82 },
-    { text: "kinetics", value: 79 },
-    { text: "surface chemistry", value: 87 },
-    { text: "biochemistry", value: 86 },
-  ],
-  tech: [
-    { text: "machine learning", value: 100 },
-    { text: "neural networks", value: 96 },
-    { text: "quantum computing", value: 94 },
-    { text: "blockchain technology", value: 93 },
-    { text: "cybersecurity", value: 92 },
-    { text: "cloud computing", value: 91 },
-    { text: "edge computing", value: 90 },
-    { text: "Internet of Things", value: 90 },
-    { text: "artificial intelligence", value: 82 },
-    { text: "data science", value: 83 },
-    { text: "software engineering", value: 83 },
-    { text: "computer vision", value: 78 },
-    { text: "natural language processing", value: 85 },
-    { text: "robotics", value: 87 },
-    { text: "autonomous systems", value: 85 },
-    { text: "distributed systems", value: 88 },
-    { text: "microservices", value: 82 },
-    { text: "devops", value: 79 },
-    { text: "containerization", value: 87 },
-    { text: "serverless computing", value: 86 },
-  ],
-  finance: [
-    { text: "algorithmic trading", value: 100 },
-    { text: "cryptocurrency", value: 96 },
-    { text: "financial modeling", value: 94 },
-    { text: "risk management", value: 93 },
-    { text: "portfolio optimization", value: 92 },
-    { text: "quantitative finance", value: 91 },
-    { text: "market microstructure", value: 90 },
-    { text: "behavioral finance", value: 90 },
-    { text: "derivatives pricing", value: 82 },
-    { text: "credit scoring", value: 83 },
-    { text: "fraud detection", value: 83 },
-    { text: "financial technology", value: 78 },
-    { text: "high-frequency trading", value: 85 },
-    { text: "asset management", value: 87 },
-    { text: "investment strategies", value: 85 },
-    { text: "financial analytics", value: 88 },
-    { text: "regulatory compliance", value: 82 },
-    { text: "blockchain finance", value: 79 },
-    { text: "digital payments", value: 87 },
-    { text: "robo-advisors", value: 86 },
-  ],
-  general: [
-    { text: "artificial intelligence", value: 100 },
-    { text: "climate change", value: 97 },
-    { text: "quantum computing", value: 95 },
-    { text: "gene therapy", value: 93 },
-    { text: "large language models", value: 92 },
-    { text: "renewable energy", value: 91 },
-    { text: "brain-computer interface", value: 90 },
-    { text: "CRISPR gene editing", value: 89 },
-    { text: "autonomous vehicles", value: 88 },
-    { text: "synthetic biology", value: 87 },
-    { text: "space exploration", value: 86 },
-    { text: "microbiome research", value: 85 },
-    { text: "nuclear fusion", value: 84 },
-    { text: "drug discovery AI", value: 83 },
-    { text: "social media algorithms", value: 82 },
-    { text: "materials science", value: 81 },
-    { text: "precision medicine", value: 80 },
-    { text: "robotics automation", value: 79 },
-    { text: "digital twins", value: 78 },
-    { text: "carbon capture", value: 77 },
-  ],
-};
-
-type Domain = keyof typeof DOMAIN_TERMS;
-type Theme = "dark" | "light" | "vibrant";
-
-const DOMAIN_META: Record<Domain, { label: string; subtitle: string; emoji: string }> = {
-  general:   { label: "General",   subtitle: "Cross-domain exploration",               emoji: "🌐" },
-  bio:       { label: "Biology",   subtitle: "Genomics, biotech, and health research",  emoji: "🧬" },
-  chemistry: { label: "Chemistry", subtitle: "Materials, synthesis, and molecular science", emoji: "⚗️" },
-  tech:      { label: "Technology",subtitle: "AI, systems, and software innovation",    emoji: "💻" },
-  finance:   { label: "Finance",   subtitle: "Markets, risk, and quantitative strategies", emoji: "📈" },
-};
 
 const BRAND_ICON =
   "M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1";
@@ -158,12 +40,6 @@ const NAV_ITEMS: { href: string; label: string; icon: string; iconClass: string 
     label: "Peer Review",
     icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4",
     iconClass: "text-emerald-500",
-  },
-  {
-    href: "/graveyard",
-    label: "Graveyard",
-    icon: "M19 21V8a2 2 0 00-2-2h-1V5a2 2 0 00-2-2H10a2 2 0 00-2 2v1H7a2 2 0 00-2 2v13h14zM9 9h6M9 13h6",
-    iconClass: "text-zinc-500",
   },
   {
     href: "/docs",
@@ -252,6 +128,22 @@ export default function ExplorePage() {
     setLastJobId(localStorage.getItem("lastJobId"));
   }, []);
 
+  // #97: Explorer is the first page now, so it asks for a model key the way
+  // the landing page and entrance used to: only when this visitor has none and
+  // the server offers user keys (#91), and not again this tab once they've
+  // chosen the server's default.
+  useEffect(() => {
+    let cancelled = false;
+    needsModelKeyPrompt()
+      .then((ask) => {
+        if (ask && !cancelled) openModelKeyDialog();
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     const saved = localStorage.getItem("theme") as Theme | null;
     if (saved && ["dark", "light", "vibrant"].includes(saved)) setTheme(saved);
@@ -317,24 +209,12 @@ export default function ExplorePage() {
       return;
     }
     setIsLoading(true);
-    try {
-      const response = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicQuery: word }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (data.jobId) {
-        localStorage.setItem("lastJobId", data.jobId);
-        router.push(`/job/${data.jobId}`);
-      } else {
-        setIsLoading(false);
-        setTopicError(data.error ?? "Couldn't start the run — please try again.");
-      }
-    } catch (error) {
-      console.error("Error creating job:", error);
+    const run = await startResearchRun(word);
+    if (run.ok) {
+      router.push(`/job/${run.jobId}`);
+    } else {
       setIsLoading(false);
-      setTopicError("Couldn't reach the server — please try again.");
+      setTopicError(run.error);
     }
   };
 
@@ -374,6 +254,8 @@ export default function ExplorePage() {
                 <span className="hidden sm:inline">{item.label}</span>
               </Link>
             ))}
+            <ThemeSwitcher theme={theme} onThemeChange={setTheme} />
+            <AccountSlot className="ml-1" />
           </div>
         </nav>
 

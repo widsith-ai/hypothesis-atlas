@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import AccountSlot from "@/components/AccountSlot";
 
 type Theme = "dark" | "light" | "vibrant";
 
@@ -665,7 +666,7 @@ export default function ResearchGraphPage() {
     <main className={`min-h-screen ${t.mainBg} ${t.text} transition-all duration-500`}>
       <div className="container mx-auto px-4 py-10 max-w-[1500px]">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 gap-4">
+        <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
           <div>
             <div className={t.headingPlate}>
               <h1 className={`text-4xl font-bold ${t.heading}`}>Research Graph</h1>
@@ -674,11 +675,11 @@ export default function ResearchGraphPage() {
               Your persistent knowledge across every run — topics, hypotheses, evidence, gaps, and notes.
             </p>
           </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <Link href="/" className={`px-4 py-2 rounded-lg font-semibold transition-colors ${t.navButton}`}>Home</Link>
             <Link href="/jobs" className={`px-4 py-2 rounded-lg font-semibold transition-colors ${t.navButton}`}>My Research</Link>
             <Link href="/explore" className={`px-4 py-2 rounded-lg font-semibold transition-colors ${t.navButton}`}>Explore</Link>
-            <Link href="/graveyard" className={`px-4 py-2 rounded-lg font-semibold transition-colors ${t.navButton}`}>Graveyard</Link>
+            <AccountSlot />
           </div>
         </div>
 

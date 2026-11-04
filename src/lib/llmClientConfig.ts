@@ -95,10 +95,46 @@ export function getActiveLLMConfig(): StoredLLMConfig | null {
 export interface OpenModelKeyOptions {
   /**
    * Where to go once the user has a model: after saving a key, or after
-   * choosing to continue on the server's default model. Used by the landing
-   * page's Explorer entry points, which route through this dialog first.
+   * choosing to continue on the server's default model.
    */
   continueTo?: string;
+}
+
+/** What GET /api/llm reports (#88, #91). */
+export interface ServerLLMInfo {
+  serverModel: { provider: string; model: string } | null;
+  edition: "hosted" | "self-hosted";
+  /** Whether to actively offer "bring your own key" (Explorer gate, Model key pill, menu item). */
+  offerUserKeys: boolean;
+}
+
+let serverInfoPromise: Promise<ServerLLMInfo | null> | null = null;
+
+/** Fetched once per page load and shared by every caller. Null if the server couldn't be reached. */
+export function fetchServerLLMInfo(): Promise<ServerLLMInfo | null> {
+  if (!serverInfoPromise) {
+    serverInfoPromise = fetch("/api/llm")
+      .then((r) => (r.ok ? (r.json() as Promise<ServerLLMInfo>) : null))
+      .catch(() => null)
+      .then((info) => {
+        if (!info) serverInfoPromise = null; // let a later caller retry
+        return info;
+      });
+  }
+  return serverInfoPromise;
+}
+
+/**
+ * #88/#91: should this visitor be asked for a model key before AI work starts?
+ * No if they already have one (or chose the server's default this tab).
+ * Otherwise follow the server's `offerUserKeys`; if the server info can't be
+ * fetched, ask — the safe default. Used when Explorer, the open-source app's
+ * first page, opens (#97).
+ */
+export async function needsModelKeyPrompt(): Promise<boolean> {
+  if (getActiveLLMConfig() || hasChosenDefaultModel()) return false;
+  const info = await fetchServerLLMInfo();
+  return !info || info.offerUserKeys;
 }
 
 export function openModelKeyDialog(opts: OpenModelKeyOptions = {}) {

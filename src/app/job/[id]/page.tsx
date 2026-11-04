@@ -13,6 +13,7 @@ import NotesTab from "@/components/NotesTab";
 import QuestionBot from "@/components/QuestionBot";
 import InkSeal from "@/components/ink/InkSeal";
 import RunProvenance from "@/components/RunProvenance";
+import AccountSlot from "@/components/AccountSlot";
 
 interface Job {
   id: string;
@@ -241,7 +242,7 @@ export default function JobPage() {
       <header
         className={`${t.pageSoft} backdrop-blur-sm border-b px-6 py-5 shadow-sm`}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <InkSeal text="HA" size={40} />
             <div>
@@ -253,7 +254,7 @@ export default function JobPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {job.canClaim && (
               <div className="relative">
                 <button
@@ -299,6 +300,7 @@ export default function JobPage() {
               )}
               {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
             </span>
+            <AccountSlot />
           </div>
         </div>
       </header>

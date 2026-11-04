@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import ModelKeySettings from "@/components/ModelKeySettings";
+import AccountSlot from "@/components/AccountSlot";
 
 interface Account {
   id: string;
@@ -68,9 +69,12 @@ export default function AccountPage() {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <h1 className="text-xl font-bold text-gray-900">My Account</h1>
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-800">
-            ← Back home
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/" className="text-sm text-gray-500 hover:text-gray-800">
+              ← Back home
+            </Link>
+            <AccountSlot />
+          </div>
         </div>
       </header>
 

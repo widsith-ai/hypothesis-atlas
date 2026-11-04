@@ -25,8 +25,9 @@ It includes a full **Academic Paper Pipeline** built around **Atlas Plan**, an i
 
 1.0 is the first official release. It brings together everything built across the development milestones (V1–V4, listed under [Release History](#release-history)) and adds:
 
-- **A Monet-style look, by default.** The app is now painted in an Impressionist style: full-page paintings of a water-lily pond, a footbridge over lilies, and a harbour at sunrise, with soft colours and paint-dab buttons to match. The ink-wash look from earlier versions is still available. Switch between the two from the theme menu on the home page. See #87.
+- **A Monet-style look, by default.** The app is now painted in an Impressionist style: full-page paintings of a water-lily pond, a footbridge over lilies, and a harbour at sunrise, with soft colours and paint-dab buttons to match. The ink-wash look from earlier versions is still available. Switch between the two from the style menu in Explorer's top bar. See #87.
 - **Bring your own model key.** Run the AI features on your own key from Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter, Mistral, DeepSeek, xAI or Together AI. The key stays in your browser and is never stored on the server. See #88.
+- **Opens on the word cloud.** `/` goes straight to Explorer, the word cloud, for everyone; sign in from the top-right corner whenever you want your research tied to an account. See #97.
 
 ---
 
@@ -100,7 +101,7 @@ Three steps: **Setup → Plan → Experiments**.
 - **Workspace-isolated**: every entity and edge belongs to a workspace (your account, or a shared `default` workspace when self-hosted/anonymous) — two accounts' graphs never collide even when they discover the same concept; visibility (private / shared / public) controls who else can read it, one PATCH away
 - **Deduplicated by design**: entities are keyed by (workspace, type, normalized label), so the same concept found in different runs converges onto one node; papers collapse by title; `POST /api/graph/dedupe` merges any stragglers (user-created entities always win the merge)
 - **Verified before it's written**: every finding and disagreement a run produces is checked against its own sources (sanitize → split into single claims → overlap/NLI/LLM-judge grounding) before syncing; a claim that fails the check is **never dropped** — it's still written, just badged (unsupported / contradicted / unverified) so you can see it in the graph
-- **Negative results get kept**: record an outcome (result, failure mode, effect, conditions) against any hypothesis; its status (proposed → grounded → under test → supported / refuted / inconclusive, or abandoned with a reason) is computed from its outcomes automatically — a single refuted outcome outweighs any number of supporting ones. Refuted and abandoned hypotheses get their own **Graveyard** view (`/graveyard`), filterable by method and dataset, so failed work stays visible instead of looking identical to everything still open
+- **Negative results get kept**: record an outcome (result, failure mode, effect, conditions) against any hypothesis; its status (proposed → grounded → under test → supported / refuted / inconclusive, or abandoned with a reason) is computed from its outcomes automatically — a single refuted outcome outweighs any number of supporting ones. Refuted and abandoned hypotheses keep their status, so failed work stays visible instead of looking identical to everything still open
 - **Ask across all runs**: type "what have I learned about X" and Groq synthesizes an answer grounded in the matched entities, their connected context, and the supporting papers — with inline citations and a key-takeaways / open-gaps breakdown
 - **Full graph editing**: create, edit, and delete entities and edges; connect any two entities with typed relationships (motivates / supports / uses method / contradicts / reveals / related to / notes on / tests / uses dataset / derived from / transferred from / replicates)
 - **Origin tracking**: run-derived entities refresh on every re-sync; anything you create or edit is marked user-created/user-edited (white ring on the canvas) and is never overwritten
@@ -109,7 +110,7 @@ Three steps: **Setup → Plan → Experiments**.
 - **Notes live in the graph**: job notes are stored as graph entities (not localStorage) with automatic one-time migration of existing local notes; they feed cross-run queries like everything else
 
 ### Appearance
-- **Two styles, picked from the theme menu on the home page**: **Monet** (the default) and **Ink wash**. The choice is remembered and applies on every page
+- **Two styles, picked from the style menu in Explorer's top bar**: **Monet** (the default) and **Ink wash**. The choice is remembered and applies on every page
 - **Three scenes in each style**, matching the light, vibrant and dark colour modes:
 
   | Colour mode | Monet | Ink wash |
@@ -184,13 +185,13 @@ Open http://localhost:3000
 
 > `ANTHROPIC_API_KEY` is only required for Paper Compare Mode. `GROQ_API_KEY` powers Atlas Plan and the rest of the app's LLM features. `NEXTAUTH_SECRET`/`NEXTAUTH_URL` are required for sign-in to work at all; `REQUIRE_AUTH` only matters if you want to *require* an account (the hosted tier) rather than make one optional (self-hosted default).
 >
-> **Bring your own model key (#88).** Users can also run the AI features on their own key: the **Model key** button (top-right, or **Model & API key** in the account menu) takes a provider (Anthropic/Claude, OpenAI, Google Gemini, Groq, OpenRouter, Mistral, DeepSeek, xAI, Together AI), a model and a key. The key stays in the browser (`sessionStorage`, or `localStorage` if the user picks "Remember on this device"), is sent only with same-origin `/api/*` requests, and is used for that request only. It is never stored, logged or written to the run log. With no user key, the server keys above are used as before. Background research jobs (the worker) always use the server key.
+> **Bring your own model key (#88).** Users can also run the AI features on their own key: the **Model key** button (top-right, or **Model & API key** in the account menu) takes a provider (Anthropic/Claude, OpenAI, Google Gemini, Groq, OpenRouter, Mistral, DeepSeek, xAI, Together AI), a model and a key. The key stays in the browser (`sessionStorage`, or `localStorage` if the user picks "Remember on this device"), is sent only with same-origin `/api/*` requests, and is used for that request only. It is never stored, logged or written to the run log. With no user key, the server keys above are used as before. Background research jobs (the worker) always use the server key. On a **self-hosted** instance whose backend already has a model key (`ATLAS_EDITION="self-hosted"`, the default), users are never prompted for one; the Model key pill and Explorer prompt only appear on the **hosted** edition (`ATLAS_EDITION="hosted"`, or `REQUIRE_AUTH="true"`) or when the server has no key (#91). When a prompt is needed, Explorer asks once as it opens (#97).
 
 ---
 
 ## Usage
 
-1. Visit `/explore`, choose a domain, and click a term in the word cloud
+1. Open the app — `/` opens straight on Explorer (`/explore`) — choose a domain, and click a term in the word cloud
 2. Watch the real-time evidence gathering in the Knowledge Tree
 3. Open the **Notebook** tab → brainstorm → **Converge to Top 3** ideas
 4. Click **Write Paper** in the tab bar → **Setup**: pick an idea and collect papers → **Plan**: draft, edit, and re-check claims with Atlas Plan → **Experiments**: design and verify an experiment for it
@@ -288,14 +289,13 @@ The entries below are the numbered development milestones that led up to 1.0. Th
 
 ### V3.0.3 — Negative Results
 
-Every hypothesis implicitly looked "open" — there was no way to record that one was tested and failed, or abandoned. You can now record an **outcome** (result, failure mode, effect, conditions) against any hypothesis; its status — proposed → grounded → under test → supported / refuted / inconclusive, or abandoned with a required reason — is computed from its outcomes automatically, and a single refuted outcome always outweighs any number of supporting ones. A new **Graveyard** page (`/graveyard`, linked from Explore and the graph header) lists refuted and abandoned hypotheses, filterable by method and dataset; method entities in the graph inspector automatically collect the known failure modes of hypotheses tested with them. Outcomes are private by default, with one-click sharing (now available on any entity). See #56.
+Every hypothesis implicitly looked "open" — there was no way to record that one was tested and failed, or abandoned. You can now record an **outcome** (result, failure mode, effect, conditions) against any hypothesis; its status — proposed → grounded → under test → supported / refuted / inconclusive, or abandoned with a required reason — is computed from its outcomes automatically, and a single refuted outcome always outweighs any number of supporting ones. A new **Graveyard** page (`/graveyard`, linked from Explore and the graph header) lists refuted and abandoned hypotheses, filterable by method and dataset; method entities in the graph inspector automatically collect the known failure modes of hypotheses tested with them. Outcomes are private by default, with one-click sharing (now available on any entity). See #56. *(The Graveyard page and `/api/graph/graveyard` are not part of version 1.0; they're preserved on the `graveyard-archive` branch — #92.)*
 
 #### New API routes (V3.0.3)
 
 | Route | Method | Purpose |
 |---|---|---|
 | `/api/graph/outcomes` | POST | Record an outcome against a hypothesis (creates the outcome entity + its `tests` edge in one call) |
-| `/api/graph/graveyard` | GET | Refuted/abandoned hypotheses only, filterable by `?method=` / `?dataset=` |
 | `/api/graph/entities/[id]` | PATCH | Gained `visibility` (one-click sharing) and `abandonedReason` (set to abandon with a reason; `null` to un-abandon) |
 
 ### V3.0.2 — Claim Record & Verification Gate
