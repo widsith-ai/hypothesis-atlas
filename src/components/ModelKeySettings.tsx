@@ -27,6 +27,9 @@ interface ServerInfo {
   serverModel: { provider: string; model: string } | null;
 }
 
+/** Select value for "type my own model name". Not a valid model id, so it can't collide. */
+const OTHER_MODEL = "__other__";
+
 type TestState = { kind: "idle" } | { kind: "testing" } | { kind: "ok"; reply: string } | { kind: "error"; message: string };
 
 /** Subscribes to the stored config so every consumer stays in sync. */
@@ -57,6 +60,8 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
   const [server, setServer] = useState<ServerInfo | null>(null);
   const [provider, setProvider] = useState<LLMProviderId>("anthropic");
   const [model, setModel] = useState("");
+  // True when the user picked "Other model…" (or a saved model isn't in the list).
+  const [otherModel, setOtherModel] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [remember, setRemember] = useState(false);
   const [test, setTest] = useState<TestState>({ kind: "idle" });
@@ -75,12 +80,27 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
     if (!active) return;
     setProvider(active.provider);
     setModel(active.model);
+    setOtherModel(Boolean(active.model) && !(getProviderInfo(active.provider)?.models ?? []).includes(active.model));
     setApiKey(active.apiKey);
     setRemember(active.remember);
   }, [active]);
 
   const info = getProviderInfo(provider)!;
-  const effectiveModel = model.trim() || info.defaultModel;
+  // A provider's default model is always offered, even if not in its suggestion list.
+  const modelOptions = info.models.includes(info.defaultModel) ? info.models : [info.defaultModel, ...info.models];
+  const effectiveModel = model.trim() || (otherModel ? "" : info.defaultModel);
+  const selectedModel = otherModel ? OTHER_MODEL : modelOptions.includes(effectiveModel) ? effectiveModel : info.defaultModel;
+
+  const changeModel = (value: string) => {
+    setTest({ kind: "idle" });
+    if (value === OTHER_MODEL) {
+      setOtherModel(true);
+      setModel("");
+    } else {
+      setOtherModel(false);
+      setModel(value);
+    }
+  };
   const canSubmit = apiKey.trim().length > 0 && effectiveModel.length > 0;
 
   const current = (): StoredLLMConfig => ({
@@ -92,7 +112,8 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
 
   const changeProvider = (next: LLMProviderId) => {
     setProvider(next);
-    setModel("");
+    setModel(getProviderInfo(next)?.defaultModel ?? "");
+    setOtherModel(false);
     setTest({ kind: "idle" });
   };
 
@@ -122,7 +143,8 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
   const remove = () => {
     clearLLMConfig();
     setApiKey("");
-    setModel("");
+    setModel(info.defaultModel);
+    setOtherModel(false);
     setRemember(false);
     setTest({ kind: "idle" });
     setNotice("Removed. AI features now use the server's model.");
@@ -154,19 +176,35 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
 
       <label className="block">
         <span className="block text-xs font-semibold text-gray-700 mb-1">Model</span>
-        <input
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          list={`llm-models-${provider}`}
-          placeholder={info.defaultModel}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-        <datalist id={`llm-models-${provider}`}>
-          {info.models.map((m) => (
-            <option key={m} value={m} />
+        <select
+          value={selectedModel}
+          onChange={(e) => changeModel(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {modelOptions.map((m) => (
+            <option key={m} value={m}>
+              {m}
+              {m === info.defaultModel ? "  (default)" : ""}
+            </option>
           ))}
-        </datalist>
-        <span className="block text-[11px] text-gray-400 mt-1">Any model your key can use. Leave empty for {info.defaultModel}.</span>
+          <option value={OTHER_MODEL}>Other model…</option>
+        </select>
+        {otherModel && (
+          <input
+            value={model}
+            onChange={(e) => {
+              setModel(e.target.value);
+              setTest({ kind: "idle" });
+            }}
+            placeholder={`Exact model id, e.g. ${info.defaultModel}`}
+            autoFocus
+            spellCheck={false}
+            className="mt-2 w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        )}
+        <span className="block text-[11px] text-gray-400 mt-1">
+          {otherModel ? "Any model id your key can use — newly released models work too." : "Pick a model, or choose “Other model…” to type one."}
+        </span>
       </label>
 
 

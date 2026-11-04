@@ -1039,6 +1039,15 @@ h1, h2, h3, .font-display {
     background-color: rgb(var(--c-white) / 0.8);
   }
 
+  /* A glass <select> must not hand its translucency to its open option list
+     (some browsers paint options with the select's background), or the
+     choices become unreadable over the painting. */
+  select option {
+    background-color: #fbfbf8;
+    color: #1f2937;
+    text-shadow: none;
+  }
+
   /* Fields with no background class of their own (browser default white). */
   :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), textarea, select):not([class*="bg-"]) {
     background-color: rgb(var(--c-white) / 0.5);
