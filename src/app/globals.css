@@ -65,7 +65,7 @@ body {
   background-color: #dfe6ee;
   background-image:
     var(--monet-canvas),
-    radial-gradient(ellipse 75% 60% at 50% 38%, rgb(251 251 248 / 0.42), rgb(251 251 248 / 0.12) 75%),
+    radial-gradient(ellipse 75% 60% at 50% 38%, rgb(251 251 248 / 0.45), rgb(251 251 248 / 0.22) 75%),
     var(--monet-scene-lilies);
   background-size: 180px 180px, 100% 100%, cover;
   background-position: 0 0, 0 0, center;
@@ -92,7 +92,7 @@ body {
   background-image:
     var(--monet-canvas),
     linear-gradient(to bottom, rgb(251 251 248 / 0.4), transparent 140px),
-    radial-gradient(ellipse 70% 58% at 50% 42%, rgb(251 251 248 / 0.6), rgb(251 251 248 / 0.22) 78%),
+    radial-gradient(ellipse 70% 58% at 50% 42%, rgb(251 251 248 / 0.6), rgb(251 251 248 / 0.3) 78%),
     var(--monet-scene-bridge);
   background-size: 180px 180px, 100% 100%, 100% 100%, cover;
   background-position: 0 0, 0 0, 0 0, center;
@@ -100,17 +100,35 @@ body {
   background-attachment: scroll, fixed, fixed, fixed;
 }
 
-/* Plain pages (the workspace, #78): bare primed canvas, no painting — opaque,
-   so the body's painting doesn't show through. The workspace's dark/vibrant
-   modes carry ink-toned arbitrary colours; retint them. */
+/* Working surfaces (the workspace, #78): still the painting — Monet has no
+   white backgrounds (#90) — but under a heavy veil, so it reads as a quiet
+   wash of colour behind the chat rather than a picture competing with it.
+   The workspace marks its dark/vibrant modes with ink-era arbitrary colours. */
 :root[data-style="monet"] .ink-plain {
-  background-color: #eef0f4;
-  background-image: var(--monet-canvas);
-  background-size: 180px 180px;
-  background-attachment: scroll;
+  background-color: #e4e9f0;
+  background-image:
+    var(--monet-canvas),
+    linear-gradient(rgb(243 244 250 / 0.72), rgb(243 244 250 / 0.72)),
+    var(--monet-scene-lilies);
+  background-size: 180px 180px, 100% 100%, cover;
+  background-position: 0 0, 0 0, center;
+  background-repeat: repeat, no-repeat, no-repeat;
+  background-attachment: scroll, fixed, fixed;
 }
-:root[data-style="monet"] .ink-plain[class~="bg-[#12100e]"] { background-color: #16171d; }
-:root[data-style="monet"] .ink-plain[class~="bg-[#f3efe2]"] { background-color: #eef1ea; }
+:root[data-style="monet"] .ink-plain[class~="bg-[#12100e]"] {
+  background-color: #16171d;
+  background-image:
+    var(--monet-canvas),
+    linear-gradient(rgb(17 17 34 / 0.62), rgb(17 17 34 / 0.62)),
+    var(--monet-scene-sunrise);
+}
+:root[data-style="monet"] .ink-plain[class~="bg-[#f3efe2]"] {
+  background-color: #e6ece1;
+  background-image:
+    var(--monet-canvas),
+    linear-gradient(rgb(243 246 240 / 0.74), rgb(243 246 240 / 0.74)),
+    var(--monet-scene-bridge);
+}
 
 /* ── Ink wash ───────────────────────────────────────────────────────────
  * Layers (top → bottom): paper fibre, painted landscape, ink blooms.
