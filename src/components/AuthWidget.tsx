@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import AuthModal from "./AuthModal";
-import { useActiveLLMConfig, describeLLMConfig } from "./ModelKeySettings";
+import { useActiveLLMConfig, useServerLLMInfo, describeLLMConfig } from "./ModelKeySettings";
 import { openModelKeyDialog } from "@/lib/llmClientConfig";
 
 /**
@@ -33,6 +33,10 @@ export default function AuthWidget() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const llmConfig = useActiveLLMConfig();
+  // #91: self-hosted with backend keys → don't push "bring your own key".
+  // Shown only once the server says to (no flash), or if a key is already set.
+  const serverInfo = useServerLLMInfo();
+  const showModelKey = Boolean(llmConfig) || Boolean(serverInfo?.offerUserKeys);
 
   // Lets any page open the sign-in modal without owning its state — the
   // landing page uses this to gate "Try Explorer" behind an account.
@@ -102,17 +106,19 @@ export default function AuthWidget() {
                 >
                   Settings
                 </Link>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    openModelKeyDialog();
-                  }}
-                  title={describeLLMConfig(llmConfig)}
-                  className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center justify-between"
-                >
-                  Model &amp; API key
-                  {llmConfig && <span className="w-2 h-2 rounded-full bg-emerald-500" aria-label="Using your own key" />}
-                </button>
+                {showModelKey && (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      openModelKeyDialog();
+                    }}
+                    title={describeLLMConfig(llmConfig)}
+                    className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center justify-between"
+                  >
+                    Model &amp; API key
+                    {llmConfig && <span className="w-2 h-2 rounded-full bg-emerald-500" aria-label="Using your own key" />}
+                  </button>
+                )}
                 <div className="my-1 border-t border-gray-100" />
                 <button
                   onClick={() => signOut()}
@@ -126,14 +132,16 @@ export default function AuthWidget() {
         ) : (
           <div className="flex items-center gap-1.5">
             {/* #88: anonymous / self-hosted users can bring a key without an account. */}
-            <button
-              onClick={() => openModelKeyDialog()}
-              title={describeLLMConfig(llmConfig)}
-              className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-xs font-medium text-gray-600 hover:bg-white transition-colors flex items-center gap-1.5"
-            >
-              {llmConfig && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
-              Model key
-            </button>
+            {showModelKey && (
+              <button
+                onClick={() => openModelKeyDialog()}
+                title={describeLLMConfig(llmConfig)}
+                className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-xs font-medium text-gray-600 hover:bg-white transition-colors flex items-center gap-1.5"
+              >
+                {llmConfig && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                Model key
+              </button>
+            )}
             <button
               onClick={() => setModalOpen(true)}
               className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-xs font-semibold text-gray-700 hover:bg-white transition-colors"

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { getActiveLLMConfig, hasChosenDefaultModel, openModelKeyDialog } from "@/lib/llmClientConfig";
+import { fetchServerLLMInfo, getActiveLLMConfig, hasChosenDefaultModel, openModelKeyDialog } from "@/lib/llmClientConfig";
+import { useRouter } from "next/navigation";
 import InkLandscape, { type InkVariant } from "@/components/ink/InkLandscape";
 import InkSeal from "@/components/ink/InkSeal";
 import Enso from "@/components/ink/Enso";
@@ -257,6 +258,12 @@ export default function Home() {
   // #88: signed in but no model key of their own in this browser → open the
   // Model & API key dialog first; saving a key (or choosing the server's
   // default model, when it has one) continues on to /explore.
+  // #91: a self-hosted instance whose backend already has keys skips the
+  // dialog entirely; the edition info is fetched once and cached.
+  const router = useRouter();
+  useEffect(() => {
+    fetchServerLLMInfo();
+  }, []);
   const requireSignInForExplorer = (e: React.MouseEvent) => {
     if (authStatus !== "authenticated") {
       e.preventDefault();
@@ -265,7 +272,11 @@ export default function Home() {
     }
     if (getActiveLLMConfig() || hasChosenDefaultModel()) return;
     e.preventDefault();
-    openModelKeyDialog({ continueTo: "/explore" });
+    fetchServerLLMInfo().then((info) => {
+      // Unreachable server info → offer the dialog (the safe default).
+      if (info && !info.offerUserKeys) router.push("/explore");
+      else openModelKeyDialog({ continueTo: "/explore" });
+    });
   };
 
   useEffect(() => {
