@@ -5,6 +5,7 @@ import "./globals.css";
 import "./ink.css";
 import SessionProviderWrapper from "@/components/SessionProviderWrapper";
 import AuthWidget from "@/components/AuthWidget";
+import { ModelKeyDialogHost } from "@/components/ModelKeySettings";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 // Ink-wash theme type: a calligraphic serif for headings, and a brush script
@@ -26,6 +27,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} ${inter.variable} ${display.variable} ${brush.variable}`} suppressHydrationWarning>
         <SessionProviderWrapper>
+          {/* #88: first, so the fetch bridge is installed before page effects run. */}
+          <ModelKeyDialogHost />
           <AuthWidget />
           {children}
         </SessionProviderWrapper>

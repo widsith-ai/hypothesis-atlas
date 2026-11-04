@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-import { groq } from '@/lib/groq'
+import { getLLM } from '@/lib/llm'
 import type { AtlasPlan, GroundedPlanClaim, PlanMode } from '@/lib/atlasPlanExport'
 import {
   createPaperDocument,
@@ -72,7 +72,6 @@ export function mergePlanSources(dbSources: PlanSourceInput[], extra: unknown): 
   return merged
 }
 
-const MODEL = 'openai/gpt-oss-120b'
 
 export function buildPlanSystemPrompt(mode: PlanMode): string {
   const shared = `You are Atlas Plan, a research-paper planning assistant inside Hypothesis Atlas. You draft a plan directly from the hypothesis and the sources you are given — you do not ask the researcher questions, and you never invent a citation, a finding, or a source title that was not provided to you. If no supplied source supports a claim, say so by leaving its cited sources empty rather than guessing. Return JSON only, no prose outside it.`
@@ -195,12 +194,13 @@ export async function generateAtlasPlan(
   instruction: string | null,
   referenceDoc?: { name: string; content: string } | null
 ): Promise<AtlasPlan> {
-  if (!groq) {
+  const llm = getLLM()
+  if (!llm) {
     return { mode, contributionStatement: null, claims: [], methodAndDataPlan: null, threatsToValidity: [], outline: [], available: false }
   }
 
-  const completion = await groq.chat.completions.create({
-    model: MODEL,
+  const completion = await llm.client.chat.completions.create({
+    model: llm.model,
     temperature: 0.3,
     max_tokens: 1200,
     messages: [

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { groq, streamGroqChat, type ChatMessage } from '@/lib/groq'
+import { streamGroqChat, type ChatMessage } from '@/lib/groq'
+import { hasLLM, LLM_NOT_CONFIGURED_MESSAGE } from '@/lib/llm'
 
 // #22/V4.2: the Workspace page's chat pane isn't scoped to one research run
 // the way /api/jobs/[id]/assistant-chat is — it's the entrance, before any
@@ -13,9 +14,9 @@ You're talking to the researcher from the Workspace page — the app's chat-firs
 When the user asks you to remember, save, or note something, end your reply with a final line starting with "📝" followed by the note content — but mention that notes only save once a research run is open (this chat has no run to attach a note to yet).`
 
 export async function POST(request: NextRequest) {
-  if (!groq) {
+  if (!hasLLM()) {
     return NextResponse.json(
-      { error: 'GROQ_API_KEY is not configured. Add it to your .env.local file.' },
+      { error: LLM_NOT_CONFIGURED_MESSAGE },
       { status: 503 }
     )
   }

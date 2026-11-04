@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { groq, streamGroqChat, ChatMessage } from '@/lib/groq'
+import { streamGroqChat, ChatMessage } from '@/lib/groq'
+import { hasLLM, LLM_NOT_CONFIGURED_MESSAGE } from '@/lib/llm'
 import type { BoldIdeaAgentTrace } from '@/lib/boldIdeaAgents'
 
 /**
@@ -17,9 +18,9 @@ import type { BoldIdeaAgentTrace } from '@/lib/boldIdeaAgents'
  * prisma.job.findUnique for every bold idea message.
  */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  if (!groq) {
+  if (!hasLLM()) {
     return NextResponse.json(
-      { error: 'GROQ_API_KEY is not configured. Add it to your .env.local file.' },
+      { error: LLM_NOT_CONFIGURED_MESSAGE },
       { status: 503 }
     )
   }

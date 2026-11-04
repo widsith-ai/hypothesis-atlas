@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { appendNote } from "@/lib/notes";
 import ChatMarkdown, { hasWideContent } from "./ChatMarkdown";
+import { LLM_CONFIG_CHANGED_EVENT, openModelKeyDialog } from "@/lib/llmClientConfig";
 
 interface Message {
   role: "user" | "assistant";
@@ -82,6 +83,12 @@ export default function AssistantChat({
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [noKey, setNoKey] = useState(false);
+  // #88: adding (or changing) a key in the Model & API key dialog unlocks the chat again.
+  useEffect(() => {
+    const unlock = () => setNoKey(false);
+    window.addEventListener(LLM_CONFIG_CHANGED_EVENT, unlock);
+    return () => window.removeEventListener(LLM_CONFIG_CHANGED_EVENT, unlock);
+  }, []);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [highlightPopup, setHighlightPopup] = useState<{ text: string; x: number; y: number } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -297,9 +304,12 @@ export default function AssistantChat({
       {/* No API key banner */}
       {noKey && (
         <div className="mx-4 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-          <strong>Missing API Key.</strong> Add{" "}
-          <code className="font-mono bg-amber-100 px-1 rounded">GROQ_API_KEY=gsk_...</code>{" "}
-          to your <code className="font-mono">.env.local</code> and restart the dev server.
+          <strong>No model key.</strong>{" "}
+          <button onClick={openModelKeyDialog} className="underline font-semibold hover:text-amber-900">
+            Add your own API key
+          </button>{" "}
+          (Claude, OpenAI, Gemini, Groq…), or set{" "}
+          <code className="font-mono bg-amber-100 px-1 rounded">GROQ_API_KEY</code> on the server.
         </div>
       )}
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { groq } from './groq'
+import { getLLM } from './llm'
 
 /**
  * "Try Something Bold" — tags unconstrained free-text research ideas with
@@ -21,10 +21,11 @@ const FALLBACK_TAG = 'General'
  * more than one tag, unlike the word cloud's single fixed domain per word.
  */
 export async function tagSubjects(text: string): Promise<string[]> {
-  if (!groq) return [FALLBACK_TAG]
+  const llm = getLLM()
+  if (!llm) return [FALLBACK_TAG]
   try {
-    const completion = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+    const completion = await llm.client.chat.completions.create({
+      model: llm.model,
       temperature: 0.2,
       // gpt-oss-120b is a reasoning model — its "reasoning" tokens are drawn
       // from the same max_tokens budget as the final "content", before it.

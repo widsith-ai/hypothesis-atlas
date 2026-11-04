@@ -1,4 +1,4 @@
-import { groq } from '@/lib/groq'
+import { getLLM } from '@/lib/llm'
 
 export type ClaimCategory = 'strength' | 'weakness' | 'question'
 export type ClaimKind = 'assertion' | 'absence'
@@ -257,11 +257,12 @@ function parseJsonObject(raw: string): Record<string, unknown> | null {
 }
 
 async function adjudicateWithLlm(claim: ReviewClaimInput, spans: PaperSpan[]): Promise<ClaimGrounding | null> {
-  if (!groq) return null
+  const llm = getLLM()
+  if (!llm) return null
   const evidence = spans.map((span) => `[${span.id}] ${span.text}`).join('\n')
   try {
-    const completion = await groq.chat.completions.create({
-      model: 'openai/gpt-oss-120b',
+    const completion = await llm.client.chat.completions.create({
+      model: llm.model,
       temperature: 0,
       max_tokens: 180,
       messages: [
