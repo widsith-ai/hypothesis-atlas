@@ -1,223 +1,322 @@
-# Hypothesis Atlas
+<div align="center">
 
-**Version 1.0 — the first official release.** See [What's new in 1.0](#whats-new-in-10).
+<img src="docs/images/banner.jpg" alt="Hypothesis Atlas — Map the evidence. See the science." width="100%" />
 
-Hypothesis Atlas is a multi-domain evidence mapping platform that automatically discovers, analyzes, and visualizes scientific and technical knowledge from peer-reviewed papers, datasets, and social signals — then carries that research through planning and peer review without leaving the app.
+<h3>An open-source research atlas: from a single topic to a grounded, peer-reviewed paper plan.</h3>
 
-It includes a full **Academic Paper Pipeline** built around **Atlas Plan**, an in-app planning tool that drafts a contribution statement, claims, an evidence map grounded in your own sources, and an outline, directly from your research; a **Peer Review** committee of reviewer agents; a **persistent Research Graph** that accumulates across every run; and real **accounts**, so research and plans belong to the person who made them.
+<p>
+  <a href="CHANGELOG.md"><img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-3f63b0?style=flat-square" /></a>
+  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-b45168?style=flat-square" /></a>
+  <img alt="Next.js 14" src="https://img.shields.io/badge/Next.js-14-101b38?style=flat-square&logo=nextdotjs" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-2f4d93?style=flat-square&logo=typescript&logoColor=white" />
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-15-4f8a6e?style=flat-square&logo=postgresql&logoColor=white" />
+  <img alt="Tested with Vitest" src="https://img.shields.io/badge/tested_with-Vitest-8a6fa8?style=flat-square&logo=vitest&logoColor=white" />
+</p>
 
-## Contents
+<p>
+  <a href="#-quick-start"><b>Quick start</b></a> ·
+  <a href="#-features"><b>Features</b></a> ·
+  <a href="#-configuration"><b>Configuration</b></a> ·
+  <a href="#-architecture"><b>Architecture</b></a> ·
+  <a href="CHANGELOG.md"><b>Changelog</b></a> ·
+  <a href="#-license--support"><b>License &amp; support</b></a>
+</p>
 
-- [What's new in 1.0](#whats-new-in-10)
-- [Demo Video](#demo-video)
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Usage](#usage)
-- [Acknowledgments and prior art](#acknowledgments-and-prior-art)
-- [Deployment](#deployment)
-- [Development](#development)
-- [Release History](#release-history)
-- [Contributing](#contributing)
-- [Security](#security)
-- [License](#license)
-
-## What's new in 1.0
-
-1.0 is the first official release. It brings together everything built across the development milestones (V1–V4, listed under [Release History](#release-history)) and adds:
-
-- **A Monet-style look, by default.** The app is now painted in an Impressionist style: full-page paintings of a water-lily pond, a footbridge over lilies, and a harbour at sunrise, with soft colours and paint-dab buttons to match. The ink-wash look from earlier versions is still available. Switch between the two from the style menu in Explorer's top bar. See #87.
-- **Bring your own model key.** Run the AI features on your own key from Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter, Mistral, DeepSeek, xAI or Together AI. The key stays in your browser and is never stored on the server. See #88.
-- **Opens on the word cloud.** `/` goes straight to Explorer, the word cloud, for everyone; sign in from the top-right corner whenever you want your research tied to an account. See #97.
+</div>
 
 ---
 
-## Demo Video
+**Hypothesis Atlas** turns a research topic into a living map of the evidence. Pick a word from the cloud and Atlas gathers peer-reviewed papers, datasets and social signals, builds a knowledge tree of methods, findings, disagreements and open problems, and checks every claim against its sources before anything is written. From there it carries the work forward: plan a paper with **Atlas Plan**, design and verify experiments, and rehearse peer review with a committee of reviewer agents. Every run feeds one **persistent Research Graph**, so what you learn accumulates instead of disappearing.
 
-[![Watch the V1 demo](https://img.youtube.com/vi/5io6ZrWCPIw/maxresdefault.jpg)](https://youtu.be/5io6ZrWCPIw)
+It's free, self-hostable, and **AGPL-3.0**. Bring your own model key (Claude, OpenAI, Gemini, Groq and five more), or run it on the server's.
 
-▶️ V1 — Evidence Mapping & Knowledge Tree
+<p align="center">
+  <img src="docs/images/explorer.jpg" alt="Topic Explorer: the word cloud, with domain filters and a topic search" width="92%" />
+  <br /><sub><b>Explorer</b>: click any topic to launch an evidence-mapping run, or search your own.</sub>
+</p>
 
-[![Watch the V2 demo](https://img.youtube.com/vi/V8uTbUVssmI/maxresdefault.jpg)](https://youtu.be/V8uTbUVssmI)
+## ✨ Why Atlas
 
-▶️ V2 — Paper Pipeline + ARS Integration
+- **Grounded, not generated.** Findings are split into single claims and checked against their own sources (text overlap → NLI → LLM judge). A claim that fails is kept and visibly **badged** as unsupported, contradicted or unverified, never quietly dropped.
+- **Memory across runs.** The Research Graph deduplicates the same concept found in different runs onto one node, so you can ask *"what have I learned about X across everything?"* and get an answer that cites its sources.
+- **Research to paper in one place.** Explore → plan → experiment → review, with your own edits preserved and re-checked, and a plain-Markdown export that works with any editor or agent.
+- **Yours to run.** One command with Docker. Accounts are optional on a self-hosted instance, and your data stays on your server.
 
----
+## 🧭 Features
 
-## Features
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>🗺️ Evidence mapping</h4>
+      Word clouds for General, Biology, Chemistry, Technology and Finance, or type a 2–5 word topic. Papers come from <b>OpenAlex</b> and <b>PubMed</b>, datasets from <b>GEO</b>, plus social signals, assembled live into a knowledge tree.
+    </td>
+    <td width="50%" valign="top">
+      <h4>🧠 Persistent Research Graph</h4>
+      Every completed run syncs topics, hypotheses, methods, evidence, gaps, outcomes and datasets into one workspace-isolated graph with full editing, provenance and cross-run Q&amp;A.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>📝 Paper pipeline with Atlas Plan</h4>
+      <b>Setup → Plan → Experiments.</b> Atlas Plan drafts a contribution statement, claims, an evidence map, a method and data plan, threats to validity and an outline, all grounded in your collected sources and editable in place.
+    </td>
+    <td valign="top">
+      <h4>🧑‍⚖️ Peer-review rehearsal</h4>
+      A committee of reviewer agents (methodology &amp; novelty, venue fit &amp; impact, statistical rigor), an optional custom reviewer and a Devil's Advocate pass, graded against a venue's real call-for-papers criteria.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>💬 Workspace &amp; notebook</h4>
+      A chat-first workspace with the graph, experiments, paper map, notebook and review alongside it. Brainstorm with a streaming copilot and converge on your top three ideas.
+    </td>
+    <td valign="top">
+      <h4>🔑 Bring your own model key</h4>
+      Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter, Mistral, DeepSeek, xAI or Together AI. The key stays in your browser and is never stored, logged or written to the run log.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>📬 Weekly paper digests</h4>
+      Subscribe to any topic for a weekly email of the latest papers from the past two years, ranked by relevance and recency, with one-click unsubscribe.
+    </td>
+    <td valign="top">
+      <h4>🎨 Monet &amp; ink-wash styles</h4>
+      Impressionist paintings by default (Water Lilies, The Footbridge, Impression, Sunrise), or switch to ink wash. Both palettes keep the same lightness, so text stays equally readable.
+    </td>
+  </tr>
+</table>
 
-### Evidence Mapping
-- Area/industry selector (General · Biology · Chemistry · Technology · Finance) with per-domain word clouds
-- Custom topic search: type 2–5 words → Groq generates a live keyword cloud centered on your topic
-- **Explore toggle**: switch the word cloud to subscription mode — clicking a word subscribes to weekly papers instead of launching a research run
-- Real-time knowledge tree built from peer-reviewed papers, datasets, and social signals
-- **Redesigned Explore header**: one quiet ghost-style nav (brand + My Research · Research Graph · Write Paper · Peer Review · Docs) with color only in the icons — the word cloud stays the page's primary call to action
-- **Node-aware Explore Papers**: click any tree node to scope paper fetching to that node's topic; results show node-connection badges
-- Hub-and-spoke Paper Map: Research hub at center, weighted lines to each paper, no visual clutter between peers
-- Paper Compare Mode: pick 2 papers → Claude generates methodology differences + research gap analysis
-- Node-level detail: methods, findings, disagreements, open problems
+<p align="center">
+  <img src="docs/images/knowledge-tree.jpg" alt="A completed run: pipeline progress, the knowledge tree, and a node's methods and key findings" width="92%" />
+  <br /><sub><b>A run's knowledge tree</b>: live pipeline progress, sub-topics you can expand, and each node's methods, findings and open problems.</sub>
+</p>
 
-### Weekly Paper Subscription
-- Subscribe to any topic (from the word cloud or Knowledge Tree) for a weekly digest of the latest papers
-- Choose delivery time (8 AM / 12 PM / 6 PM / 9 PM) and number of papers (5 / 10 / 20) per week
-- First digest sent immediately on subscribe; subsequent digests delivered every Monday via Vercel Cron
-- Papers sourced from OpenAlex + PubMed, filtered to the last 2 years, ranked by relevance + recency
-- One-click unsubscribe link in every email; branded confirmation page
+<details>
+<summary><b>Evidence mapping, in detail</b></summary>
 
-### Notebook & Topic Copilot
-- AI-assisted brainstorm with streaming responses
-- Converge to Top 3 research ideas from your exploration
-- Export brainstorm as Markdown
+- Domain selector (General · Biology · Chemistry · Technology · Finance) with a word cloud per domain
+- Custom topic search: type 2–5 words and a live keyword cloud is generated around your topic
+- **Explore toggle**: clicking a word subscribes you to weekly papers instead of launching a run
+- Start from a paper instead: upload a PDF and the run is built from it
+- **Node-aware papers**: scope paper fetching to any node in the tree; results show which nodes they connect to
+- **Paper Map**: a hub-and-spoke map with the research topic at the centre and weighted links to each paper
+- **Paper Compare**: pick two papers to get their methodological differences and a research-gap analysis
+- Every node shows its methods, findings, disagreements and open problems
 
-### Accounts & Ownership
-- **Real sign-in**: email/password accounts (bcrypt-hashed), not the placeholder it once was
-- **Self-hosted stays anonymous by default**: accounts are opt-in unless the deployment sets `REQUIRE_AUTH=true` (the hosted tier) — a self-hosted instance works fully without anyone signing in
-- **Ownership, not a wall**: a job or bold idea created while signed in is tied to that account; anonymous work stays fully open, exactly as before accounts existed
-- **Claim flow**: sign in later and claim research you made anonymously, so nothing is orphaned by signing up after the fact
-- **Account page** (`/account`): profile (name, avatar initials, member since, plan), billing & usage (real counts of your jobs and bold ideas — no hosted billing is live yet, and the page says so rather than showing a fake price), and settings (change name, change password)
-- **My Research** shows "Yours" / "Unclaimed" badges once you're signed in, so shared or anonymous entries are never mistaken for your own
+</details>
 
-### Paper Pipeline
-Three steps: **Setup → Plan → Experiments**.
+<details>
+<summary><b>Persistent Research Graph, in detail</b></summary>
 
-- **Setup** — pick an idea (from your converged ideas, knowledge tree nodes, or the raw topic) and collect papers (search OpenAlex + PubMed, or import from the Paper Map) in one place; both feed directly into the plan
-- **Plan** — **Atlas Plan** drafts a contribution statement, claims to support, an evidence map, a method/data plan, threats to validity, and an outline, in one pass, grounded against the papers collected on Setup plus the job's own peer-reviewed sources
-  - Every section is editable in place — rewrite the contribution, add or edit a claim, adjust the outline — and your edits save automatically
-  - An edited claim is marked **"edited – not re-checked"** until you re-check it; re-checking re-grounds it against the same sources without regenerating the whole plan
-  - Each claim's grounding badge (grounded / unsupported / contradicted) expands to show the actual source passage it was checked against and which method decided it (overlap / NLI / LLM judge) — the same verification pipeline Peer Review uses
-  - Reference Document: attach a `.md` draft or notes for the planner to read as context
-  - **Export** — a structured, plain-Markdown context file (contribution, claims with their badges, method plan, threats, outline) that works with any editor or agent, not tied to one plugin
-- **Experiments** — design an experiment for the plan (hypothesis, variables, metrics, expected results) and verify quantitative claims
+- **Cross-run graph** at `/graph`: every completed run syncs its topics, hypotheses, methods, evidence, gaps, outcomes and datasets into one graph in PostgreSQL
+- **Workspace-isolated**: entities and edges belong to a workspace (your account, or a shared `default` workspace when self-hosted and anonymous), with private / shared / public visibility
+- **Deduplicated by design**: entities are keyed by workspace, type and normalized label, so the same concept from different runs converges on one node; `POST /api/graph/dedupe` merges any stragglers (user-created entities always win)
+- **Verified before it's written**: findings are sanitized, split into single claims and grounded (overlap → NLI → LLM judge). Claims that fail are written anyway, badged so you can see them
+- **Negative results are kept**: record an outcome (result, failure mode, effect, conditions) against a hypothesis. Its status (proposed → grounded → under test → supported / refuted / inconclusive, or abandoned) is computed from its outcomes, and a single refuted outcome outweighs any number of supporting ones
+- **Ask across all runs**: answers cite the matched entities, their context and the supporting papers, with key takeaways and open gaps
+- **Full editing** with typed relationships: motivates, supports, uses method, contradicts, reveals, tests, uses dataset, derived from, transferred from, replicates and more
+- **Provenance**: every entity carries its supporting papers and the exact matched passage. Each run's **Run Provenance** tab logs every prompt, model, seed and tool call, and exports as a reproducibility bundle
 
-### Peer Review
-- Standalone **Peer Review session** at `/review` (nav button on Explore, next to Write Paper)
-- A committee of three reviewer agents — methodology & novelty, venue fit & impact, statistical rigor & reproducibility — plus an optional custom reviewer with your own name and persona
-- Publisher/venue picker; paste a **call-for-papers URL** and the app scrapes the page to extract the venue's real review criteria so agents grade against them
-- Paper source defaults to your **current Write Paper draft**, or upload any `.pdf` / `.txt` / `.md`
-- Final verdict panel: averaged 1–10 scores across novelty / soundness / clarity / significance / overall, consensus recommendation (accept → reject), and an editor-style meta-review — plus full per-agent reviews with strengths, weaknesses, and questions
-- Results cached in localStorage; re-run or clear anytime
+</details>
 
-### Persistent Research Graph
-- **Cross-run knowledge graph** at `/graph` (nav button on Explore): every completed run automatically syncs its topics, hypotheses, methods, evidence, gaps, outcomes, and datasets into a single persistent graph in PostgreSQL — your research memory across all sessions
-- **Workspace-isolated**: every entity and edge belongs to a workspace (your account, or a shared `default` workspace when self-hosted/anonymous) — two accounts' graphs never collide even when they discover the same concept; visibility (private / shared / public) controls who else can read it, one PATCH away
-- **Deduplicated by design**: entities are keyed by (workspace, type, normalized label), so the same concept found in different runs converges onto one node; papers collapse by title; `POST /api/graph/dedupe` merges any stragglers (user-created entities always win the merge)
-- **Verified before it's written**: every finding and disagreement a run produces is checked against its own sources (sanitize → split into single claims → overlap/NLI/LLM-judge grounding) before syncing; a claim that fails the check is **never dropped** — it's still written, just badged (unsupported / contradicted / unverified) so you can see it in the graph
-- **Negative results get kept**: record an outcome (result, failure mode, effect, conditions) against any hypothesis; its status (proposed → grounded → under test → supported / refuted / inconclusive, or abandoned with a reason) is computed from its outcomes automatically — a single refuted outcome outweighs any number of supporting ones. Refuted and abandoned hypotheses keep their status, so failed work stays visible instead of looking identical to everything still open
-- **Ask across all runs**: type "what have I learned about X" and Groq synthesizes an answer grounded in the matched entities, their connected context, and the supporting papers — with inline citations and a key-takeaways / open-gaps breakdown
-- **Full graph editing**: create, edit, and delete entities and edges; connect any two entities with typed relationships (motivates / supports / uses method / contradicts / reveals / related to / notes on / tests / uses dataset / derived from / transferred from / replicates)
-- **Origin tracking**: run-derived entities refresh on every re-sync; anything you create or edit is marked user-created/user-edited (white ring on the canvas) and is never overwritten
-- **Provenance**: every entity carries its supporting papers (with the exact matched passage, when the verification gate found one) — click a node to see the source list and jump back to the originating run. Each run's own step-by-step log — every prompt, model, seed, tool call, and the records it produced — is on the job's **Run Provenance** tab, exportable as a reproducibility bundle
-- **Interactive canvas**: force-directed layout, type filter chips with counts, entity search, wheel zoom / drag pan, and a per-node inspector with inline editing
-- **Notes live in the graph**: job notes are stored as graph entities (not localStorage) with automatic one-time migration of existing local notes; they feed cross-run queries like everything else
+<details>
+<summary><b>Paper pipeline, in detail</b></summary>
 
-### Appearance
-- **Two styles, picked from the style menu in Explorer's top bar**: **Monet** (the default) and **Ink wash**. The choice is remembered and applies on every page
-- **Three scenes in each style**, matching the light, vibrant and dark colour modes:
+- **Setup**: pick an idea (from your converged ideas, a tree node or the raw topic) and collect papers (search OpenAlex and PubMed, or import from the Paper Map)
+- **Plan**: Atlas Plan drafts everything in one pass, grounded against your collected papers plus the run's own sources
+  - Every section is editable and saves automatically
+  - An edited claim is marked **"edited – not re-checked"** until you re-check it; re-checking re-grounds just that claim
+  - Each claim's badge (grounded / unsupported / contradicted) expands to show the passage it was checked against and which method decided it
+  - Attach a `.md` reference document as extra context
+  - **Export** a plain-Markdown context file (contribution, claims and their badges, method plan, threats, outline)
+- **Experiments**: design an experiment (hypothesis, variables, metrics, expected results) and verify its quantitative claims
 
-  | Colour mode | Monet | Ink wash |
-  |---|---|---|
-  | Light | Water Lilies | Xuan Paper |
-  | Vibrant | The Footbridge | Jade Hills |
-  | Dark | Impression, Sunrise | Ink Night |
+</details>
 
-- The Monet backgrounds are original paintings generated by `scripts/gen-monet-scenes.py`, not reproductions
-- Every colour in Monet has the same lightness as its ink-wash counterpart, so text stays equally readable in both styles
-- The Workspace stays a plain background in both styles, so nothing competes with the chat
+<details>
+<summary><b>Peer review, in detail</b></summary>
 
-### Bring Your Own Model Key
-- Use your own key for the AI features: Anthropic (Claude), OpenAI, Google Gemini, Groq, OpenRouter, Mistral, DeepSeek, xAI, or Together AI
-- Set it from the **Model key** button (top-right) or **Model & API key** in the account menu; "Try Explorer" walks you through it
-- The key stays in your browser and is sent only with that request. It is never stored, logged or written to the run log
-- Without your own key, the server's keys are used. Background research jobs always use the server key
+- A standalone session at `/review`, also available as a panel in the Workspace
+- Choose whether you're the **author** (you also get a prioritized revision roadmap and a draft response letter) or a **reviewer**
+- Pick a venue, or paste a **call-for-papers URL** so the reviewers grade against its real criteria
+- Review your current paper draft, or upload a `.pdf`, `.txt` or `.md`
+- A live progress view shows which reviewer is running
+- The verdict: averaged 1–10 scores (novelty, soundness, clarity, significance, overall), a consensus recommendation and an editor-style meta-review, plus each reviewer's strengths, weaknesses and questions
+- Download the completed review as a report
 
-### Research Management
-- `/jobs` page listing all past research runs with status, source counts, and actions
-- Per-job: View Research · Write Paper · Delete
-- One-click navigation back to Knowledge Tree, Notebook, or Paper Map from the paper session
+</details>
 
----
+<details>
+<summary><b>Accounts &amp; ownership, in detail</b></summary>
 
-## Quick Start
+- Email and password accounts (bcrypt-hashed), with password reset by emailed one-time link
+- **Optional on a self-hosted instance**: everything works without signing in unless you set `REQUIRE_AUTH=true`
+- Work done while signed in belongs to you; anonymous work stays open, and you can **claim** it after signing up
+- `/account`: profile, usage, and settings (name, password, model key)
+- My Research marks entries "Yours" or "Unclaimed" once you're signed in
 
-There are two ways to run this locally — pick one.
+</details>
 
-### Option A: Docker (two commands, no local Node setup)
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/research-graph.jpg" alt="The Research Graph: entity filters, cross-run search and the force-directed canvas" /></td>
+    <td width="50%"><img src="docs/images/workspace.jpg" alt="The Workspace: Atlas Assistant chat beside the Research Graph panel" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Research Graph</b>: every run's knowledge in one deduplicated graph.</sub></td>
+    <td align="center"><sub><b>Workspace</b>: chat first, with your research alongside.</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/images/peer-review.jpg" alt="Peer Review session: author or reviewer role, venue picker, call-for-papers URL and the paper to review" width="92%" />
+  <br /><sub><b>Peer-review rehearsal</b>: grade your draft against a real venue's criteria before you submit.</sub>
+</p>
+
+## 🔬 How it works
+
+```mermaid
+flowchart LR
+    T([Topic or paper]) --> Q[Query expansion]
+    Q --> S{{"Sources<br/>OpenAlex · PubMed · GEO · social"}}
+    S --> R[Rank and dedupe]
+    R --> K[Knowledge tree<br/>methods · findings · gaps]
+    K --> V{Claim check<br/>overlap → NLI → LLM}
+    V -->|grounded or badged| G[(Research Graph)]
+    K --> P[Atlas Plan]
+    G --> P
+    P --> E[Experiments]
+    P --> PR[Peer-review rehearsal]
+    G --> A[Ask across all runs]
+```
+
+Runs are processed by a background **worker** (BullMQ on Redis), so the web app stays responsive. Each step streams its progress to the browser and is recorded in the run's provenance log.
+
+## 🚀 Quick start
+
+**Prerequisites:** Docker. For local development, also Node.js 24 (the version the Docker image uses).
 
 ```bash
-make image   # build the app image
-make run     # start Postgres, Redis, the web app, and the worker
+git clone https://github.com/widsith-ai/hypothesis-atlas.git
+cd hypothesis-atlas
 ```
 
-Needs a `.env` — copy `.env.example` to `.env` and fill it in first. Open http://localhost:3000. Stop with `make stop`.
-
-### Option B: local dev (hot reload while you edit)
+**🐳 Option A: Docker**, everything in one go
 
 ```bash
-make laptop-install
+cp .env.example .env    # add GROQ_API_KEY and NEXTAUTH_SECRET
+make image              # build the app image
+make run                # Postgres, Redis, the app and the worker
 ```
 
-Then start the app and worker in two terminals:
+Stop it with `make stop`.
+
+**🛠️ Option B: local dev**, with hot reload while you edit
 
 ```bash
-make dev
-make worker
+make laptop-install     # dependencies, .env, Postgres, Redis, database schema
+make dev                # terminal 1: the web app
+make worker             # terminal 2: the run worker
 ```
 
-Open http://localhost:3000
+`make laptop-install` creates `.env` for you (with a generated `NEXTAUTH_SECRET`) if you don't have one; add your `GROQ_API_KEY` to it.
 
-#### Manual setup, if you'd rather not use `make`
+Open **http://localhost:3000**. It goes straight to Explorer: click a topic and watch the run build.
 
-1. Install dependencies: `npm install`
-2. Create `.env` with:
-   ```env
-   DATABASE_URL="postgresql://postgres:postgres@localhost:5434/hypothesis_atlas?schema=public"
-   REDIS_URL="redis://localhost:6379"
-   GROQ_API_KEY="your_groq_api_key_here"
-   ANTHROPIC_API_KEY="sk-ant-..."        # required for Paper Compare Mode
-   RESEND_API_KEY="re_..."               # required for weekly digest emails
-   NEXT_PUBLIC_APP_URL="http://localhost:3000"  # used in email unsubscribe links
-   NEXTAUTH_SECRET="generate with: openssl rand -base64 32"  # required for real login/signup
-   NEXTAUTH_URL="http://localhost:3000"
-   # REQUIRE_AUTH="true"  # leave unset for self-hosted/anonymous use (the default)
-   ```
-3. Start infrastructure: `make infra-up`
-4. Push schema: `make db-push`
-5. Start app and worker: `make dev` and `make worker`
+<details>
+<summary><b>Manual setup without <code>make</code></b></summary>
 
-> `ANTHROPIC_API_KEY` is only required for Paper Compare Mode. `GROQ_API_KEY` powers Atlas Plan and the rest of the app's LLM features. `NEXTAUTH_SECRET`/`NEXTAUTH_URL` are required for sign-in to work at all; `REQUIRE_AUTH` only matters if you want to *require* an account (the hosted tier) rather than make one optional (self-hosted default).
->
-> **Bring your own model key (#88).** Users can also run the AI features on their own key: the **Model key** button (top-right, or **Model & API key** in the account menu) takes a provider (Anthropic/Claude, OpenAI, Google Gemini, Groq, OpenRouter, Mistral, DeepSeek, xAI, Together AI), a model and a key. The key stays in the browser (`sessionStorage`, or `localStorage` if the user picks "Remember on this device"), is sent only with same-origin `/api/*` requests, and is used for that request only. It is never stored, logged or written to the run log. With no user key, the server keys above are used as before. Background research jobs (the worker) always use the server key. On a **self-hosted** instance whose backend already has a model key (`ATLAS_EDITION="self-hosted"`, the default), users are never prompted for one; the Model key pill and Explorer prompt only appear on the **hosted** edition (`ATLAS_EDITION="hosted"`, or `REQUIRE_AUTH="true"`) or when the server has no key (#91). When a prompt is needed, Explorer asks once as it opens (#97).
+1. `npm install`
+2. Fill in `.env` (see [Configuration](#-configuration))
+3. Start Postgres and Redis: `docker compose up -d postgres redis`
+4. Create the tables: `npm run db:push`
+5. Run `npm run dev` and, in a second terminal, `npm run worker`
 
----
+</details>
 
-## Usage
+## 🔧 Configuration
 
-1. Open the app — `/` opens straight on Explorer (`/explore`) — choose a domain, and click a term in the word cloud
-2. Watch the real-time evidence gathering in the Knowledge Tree
-3. Open the **Notebook** tab → brainstorm → **Converge to Top 3** ideas
-4. Click **Write Paper** in the tab bar → **Setup**: pick an idea and collect papers → **Plan**: draft, edit, and re-check claims with Atlas Plan → **Experiments**: design and verify an experiment for it
-5. Click **Peer Review** next to Write Paper → your current plan is loaded by default → a committee of reviewer agents grades it against your target venue
-6. Optionally export your research context as Markdown and continue writing in any editor or agent
-7. Open **Research Graph** (`/graph`) any time → every run's knowledge accumulates into one persistent, duplicate-free graph (the same concept across runs converges onto one node) → ask "what have I learned about X across all my runs" → edit or extend the graph yourself
-8. Sign in (top-right corner) if you want your research tied to an account — optional on a self-hosted instance, required on the hosted tier
+Everything is read from `.env`. Only the first block is needed for a working instance; everything else switches on an extra feature.
 
-### Paper Pipeline flow
+| Variable | | What it does |
+|---|---|---|
+| `DATABASE_URL` | **required** | PostgreSQL connection string |
+| `REDIS_URL` | **required** | Redis, for the run queue |
+| `GROQ_API_KEY` | **required**¹ | The server's default model, used by runs, planning, review and chat |
+| `NEXTAUTH_SECRET` | **required** | Signs sessions. Generate with `openssl rand -base64 32` |
+| `NEXTAUTH_URL` | **required** | The app's public URL, e.g. `http://localhost:3000` |
+| `ANTHROPIC_API_KEY` | optional | Paper Compare |
+| `OPENAI_API_KEY` | optional | The independent critic in Bold Idea explorations |
+| `RESEND_API_KEY` | optional | Sends weekly digests and password-reset emails |
+| `EMAIL_FROM` | optional | Sender address for those emails (default: Resend's test sender) |
+| `NEXT_PUBLIC_APP_URL` | optional | Base URL used in email links |
+| `CRON_SECRET` | optional | Protects the weekly-digest cron endpoint |
+| `NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE` | optional | Neo4j paper graph behind the Paper Map; without it those graph features are off |
+| `REVIEW_NLI_ENDPOINT`, `REVIEW_NLI_AUTH_TOKEN`, `REVIEW_NLI_MODEL` | optional | An NLI service for claim grounding (default model `deberta-v3-large-mnli`); without it, grounding uses overlap and the LLM judge |
+| `REQUIRE_AUTH` | optional | `true` requires an account before starting research. Unset (the default), accounts are optional |
+| `ATLAS_EDITION` | optional | `self-hosted` (default) or `hosted`. Self-hosted users are never asked for a model key when the server has one |
+
+¹ Or have users bring their own key: with no server key, Atlas asks each person for one when they start.
+
+> [!TIP]
+> **Bring your own model key.** Anyone can switch the AI features to their own provider under **Account → Settings → Model & API key** (also in the account menu when the server has no key of its own). The key lives only in their browser (`sessionStorage`, or `localStorage` with "Remember on this device"), is sent only with this app's own `/api/*` requests, and is used for that request alone. Background runs use the server's key.
+
+## 🧱 Architecture
+
+| Layer | Technology |
+|---|---|
+| Web app | **Next.js 14** (App Router), React 18, TypeScript, Tailwind CSS |
+| Data | **PostgreSQL 15** via Prisma: runs, sources, the Research Graph, accounts |
+| Queue & worker | **Redis 7** + BullMQ; a separate Node worker (`npm run worker`) executes runs |
+| Models | Groq by default; Anthropic, OpenAI, Gemini, OpenRouter, Mistral, DeepSeek, xAI and Together via bring-your-own-key |
+| Sources | OpenAlex, PubMed (NCBI E-utilities), GEO, social signals |
+| Auth & email | NextAuth (credentials), bcrypt; Resend |
+| Optional | Neo4j (paper graph), an NLI service (claim grounding) |
+| Tests | Vitest, 400+ tests (`npm test`) |
+
+<details>
+<summary><b>Project layout</b></summary>
 
 ```
-/explore  →  /job/[id]  →  /job/[id]/paper
-              (Knowledge Tree, Notebook, Paper Map)
-                                ↓
-                   1. Setup    (idea + papers)
-                   2. Plan     (Atlas Plan — draft, edit, re-check)
-                   3. Experiments
-                                ↓
-                        Export context (Markdown)
+src/
+  app/              Next.js routes: pages and /api handlers
+    explore/        the word cloud (where / goes)
+    job/[id]/       a run: knowledge tree, workspace, paper map, notes, provenance
+    graph/          the persistent Research Graph
+    workspace/      chat-first workspace with side panels
+    review/         peer-review rehearsal
+    api/            REST endpoints (jobs, graph, review, auth, llm, …)
+  components/       UI (AuthWidget, ModelKeySettings, PaperReviewPanel, …)
+  lib/              domain logic: llm.ts, review-grounding.ts, research-graph.ts, apis/, …
+  worker/           the BullMQ run processor
+prisma/             database schema
+public/monet/       the generated Impressionist backgrounds
+scripts/            setup and asset-generation scripts
+ee/                 reserved for source-available enterprise modules (see ee/README.md)
 ```
 
----
+</details>
 
-## Acknowledgments and prior art
+## 📦 Deployment
 
-Atlas's review and planning are original implementations; the projects below informed the design. No code or prompts are copied.
+**One machine:** `make image && make run` is a complete deployment: Postgres, Redis, the app and the worker, all in Docker. Set `NEXTAUTH_URL` to your domain.
+
+**Managed services:** the web app on Vercel (with `NEXTAUTH_SECRET` and `NEXTAUTH_URL` set), the worker on Railway or Render (`npm run worker`), managed PostgreSQL (Neon, Supabase), and managed Redis (Upstash). Create the tables once with `DATABASE_URL="…" npm run db:push`; skipping this after a fresh deploy shows up as a generic "server configuration" error at sign-in.
+
+## 🧪 Development
+
+```bash
+npm test             # the Vitest suite
+npx tsc --noEmit     # type-check
+npm run db:studio    # browse the database
+```
+
+Reset the local database: `docker compose down -v && docker compose up -d postgres redis && npm run db:push`
+
+## 🙏 Acknowledgments and prior art
+
+Atlas's review and planning are original implementations. The projects below informed the design; no code or prompts are copied.
 
 | Project | What it informed | License |
 |---|---|---|
@@ -230,270 +329,29 @@ Atlas's review and planning are original implementations; the projects below inf
 | [MiniCheck](https://arxiv.org/abs/2404.10774) (Tang et al., EMNLP 2024) | Checking claims against grounding documents | Apache-2.0 |
 | [DeBERTa-v3 NLI](https://huggingface.co/MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli) | The default entailment model in `review-grounding.ts` | Check the model card |
 
-If code is ever copied from an MIT/Apache project, its license notice will be listed in `THIRD_PARTY_NOTICES.md`.
+If code is ever copied from an MIT or Apache project, its license notice will be listed in `THIRD_PARTY_NOTICES.md`.
 
----
+<details>
+<summary><b>Demo videos from earlier versions</b></summary>
 
-## Deployment
+- [V1: Evidence mapping and the knowledge tree](https://youtu.be/5io6ZrWCPIw)
+- [V2: The paper pipeline](https://youtu.be/V8uTbUVssmI)
 
-**Self-hosting on one machine**: `make image && make run` (see Quick Start) is a complete deployment by itself — Postgres, Redis, the app, and the worker, all in Docker. Set `NEXTAUTH_URL` to your actual domain; leave `REQUIRE_AUTH` unset to keep it open to anonymous use.
+</details>
 
-**Production with managed services** (what the hosted tier runs):
+## 📜 License & support
 
-- **Web app**: Deploy to Vercel with env vars set (including `NEXTAUTH_SECRET` and `NEXTAUTH_URL` — login returns a generic "server configuration" error without them)
-- **Worker**: Deploy to Railway/Render (runs `npm run worker`)
-- **Database**: Managed PostgreSQL (Neon/Supabase)
-- **Queue**: Managed Redis (Upstash)
+**Hypothesis Atlas is free and open source** under the [GNU AGPL-3.0](LICENSE). Use it, self-host it, change it. If you offer a modified version as a network service, AGPL-3.0 asks you to share that version's source with its users.
 
-Push schema to production: `DATABASE_URL="prod_url" npm run db:push` — this includes the `User`/`Account`/`Session` tables accounts need; forgetting it after a fresh deploy produces the same "server configuration" error as a missing `NEXTAUTH_SECRET`, from a different cause.
+**Working with us.** For a **research collaboration**, an **enterprise or on-premises deployment**, or a **[commercial license](COMMERCIAL-LICENSE.md)** without AGPL's source-sharing obligations, email **[hello@hypothesisatlas.com](mailto:hello@hypothesisatlas.com)**. The hosted product is developed separately.
 
----
+- Releases before the `v3.2.0` tag remain MIT-licensed. Releases before `V3.0.0.1` keep their Academic Research Skills attribution (CC-BY-NC 4.0) for that integrated code.
+- `ee/` is reserved for source-available enterprise modules under the [Widsith Enterprise License](ee/LICENSE.md) (draft). The core outside `ee/` stays AGPL-3.0, and core features will never move behind a paywall.
 
-## Development
+## 🤝 Contributing
 
-```bash
-# Database studio
-npm run db:studio
+Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md); commits need a DCO `Signed-off-by:` line. Report security issues privately as described in [`SECURITY.md`](SECURITY.md).
 
-# Reset database — targets just postgres/redis; `docker-compose up -d` with no
-# service names also tries to start app/worker, which need `make image` first
-docker-compose down -v && docker-compose up -d postgres redis && npm run db:push
-```
-
----
-
-## Release History
-
-### 1.0 — First official release
-
-- **Monet painting style** as the new default, with ink wash kept as a selectable style (#87):
-  - New files: `src/lib/artStyle.ts` (the setting), `src/lib/palette.ts` (colours that switch with the style) and `src/app/paint.css` (component styles for both looks)
-  - The three backgrounds are in `public/monet/`
-- **Bring your own model key** across nine providers (#88)
-- `package.json` version set to `1.0.0`
-
-### Development milestones (before 1.0)
-
-The entries below are the numbered development milestones that led up to 1.0. Their "V" numbers are milestone names, not release versions.
-
-### V3.0.5 — Run Provenance
-
-`ProgressEvent` already logged job-level stage events ("fetch_papers: started"); nothing logged the individual agent steps within a stage — the exact prompt sent, which model answered, which tools were called, what came back — or attached that to the records a run produced. Every LLM call in the evidence-mapping pipeline now generates and logs a seed (actually sent to Groq, so the call is replayable), and every tool-call batch (OpenAlex+PubMed, GEO, social) logs which tools were called; both attach the resulting log entry to the nodes/sources they produced. A new **Run Provenance** tab on the job page shows a card per logged step — model, seed, tools, prompt, and a "human-edited since" badge when a record it produced was later hand-edited — plus a one-click export of the whole run as a reproducibility bundle (model calls with seeds, dataset/paper versions, full log). See #58.
-
-#### New API routes (V3.0.5)
-
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/jobs/[id]/run-log` | GET | A run's full step-by-step log, each step flagged `humanEdited` if one of its records was later hand-edited |
-| `/api/jobs/[id]/reproducibility-bundle` | GET | Downloadable JSON bundle: every model call with its seed, dataset/paper versions, the full run log |
-
-### V3.0.3 — Negative Results
-
-Every hypothesis implicitly looked "open" — there was no way to record that one was tested and failed, or abandoned. You can now record an **outcome** (result, failure mode, effect, conditions) against any hypothesis; its status — proposed → grounded → under test → supported / refuted / inconclusive, or abandoned with a required reason — is computed from its outcomes automatically, and a single refuted outcome always outweighs any number of supporting ones. A new **Graveyard** page (`/graveyard`, linked from Explore and the graph header) lists refuted and abandoned hypotheses, filterable by method and dataset; method entities in the graph inspector automatically collect the known failure modes of hypotheses tested with them. Outcomes are private by default, with one-click sharing (now available on any entity). See #56. *(The Graveyard page and `/api/graph/graveyard` are not part of version 1.0; they're preserved on the `graveyard-archive` branch — #92.)*
-
-#### New API routes (V3.0.3)
-
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/graph/outcomes` | POST | Record an outcome against a hypothesis (creates the outcome entity + its `tests` edge in one call) |
-| `/api/graph/entities/[id]` | PATCH | Gained `visibility` (one-click sharing) and `abandonedReason` (set to abandon with a reason; `null` to un-abandon) |
-
-### V3.0.2 — Claim Record & Verification Gate
-
-Claims used to flow into the graph with no check against their source text. Every finding and disagreement a run produces is now run through a `verifyClaim()` gate (pulled out of the peer-review grounding pipeline so it works against arbitrary source text, not just a declared-span PDF) before being written: sanitize → split into single claims → check inline citations → ground each sub-claim against its sources. A claim that fails the check is **never dropped** — it's written and badged (unsupported / contradicted / unverified) instead. `provides` was renamed `supports` (evidence → hypothesis is the correct direction) and gained `tests` / `uses_dataset` / `derived_from` / `transferred_from` / `replicates` as edge types; entities and edges both carry producer and verification stamps, and source links can now exact-match a passage (`start`/`end`/`text`) and record `role: "contradicting"`, not just `"supporting"`. `atlas.claim/v1`, the JSON Schema for a claim record, is published under its own MIT license in `schemas/`, separate from this repo's AGPL license. See #55.
-
-### V3.0.1 — Unblock the Graph: Workspace Isolation & Visibility
-
-Two different accounts' graph entities sharing the same type and label used to collide into a single record — nothing under `/api/graph` checked who was asking. Every `GraphEntity`/`GraphEdge` now belongs to a workspace (your account, or a shared `default` workspace for anonymous/self-hosted use) and carries a visibility (private by default, widenable to shared/public); every `/api/graph` route enforces it on every read and write, and `Job.userId` ownership is enforced on the routes that sync or back-fill a run into the graph. Unowned ("default" workspace) data stays exactly as open as it was before accounts existed — only another account's private data is now actually private. See #54.
-
-### V3.0.0.2 — Paper pipeline redesign around Atlas Plan
-
-Five steps became three: Select Idea and Find Papers merged into **Setup**; the separate Paper Outline step (an ungrounded, disconnected Groq prompt) was removed in favor of Atlas Plan's own outline mode. Papers collected on Setup now actually feed the plan instead of staying in `localStorage` unused. Atlas Plan's output is editable in place and re-groundable after an edit — a claim you rewrite is marked "edited – not re-checked" until you re-check it, rather than silently keeping a stale verdict — and each grounding badge expands to show the source passage it was checked against. Step bar and section headings moved onto the ink design system. See #64.
-
-### V3.0.0.1 — Replaced the ARS integration with Atlas Plan
-
-Replaced the ARS integration with Atlas Plan; the review engine was already independent of ARS and is unchanged. Atlas Plan is an original, clean-room implementation — see "Acknowledgments and prior art." Preset peer-review personas are now labeled by role instead of invented names (e.g. "Methodology & Novelty Reviewer"). See #63.
-
-### V3.5 — Ink-Wash Redesign, One-Command Docker Run & Hosted Pricing Update
-
-- **Ink-wash visual redesign** across the landing page, Explorer, job pages, My Research, Bold Idea, and the account/pricing/docs pages: a shared palette (`lib/inkPalette.ts`), ink-styled components (`components/ink/`), brush-style accents — in English, not the Chinese seals/inscriptions an earlier pass used, which read as unfamiliar characters to readers who don't use them
-- **One-command Docker run**: `make image` builds the app, `make run` starts Postgres, Redis, the app, and the worker — a complete local deployment in two commands, with secrets injected at run time rather than baked into the image
-- **Hosted pricing corrected**: the hosted tier is $19/month (unlimited runs, billed monthly, cancel anytime), not the old $1-per-round pay-per-use model; the self-hosted license badge now says AGPL-3.0, matching `LICENSE`, instead of the stale MIT label
-- Landing page: a compact theme dropdown instead of three separate buttons, fixed to no longer overlap the account widget at any screen width
-
-### V3.4 — Account Profile, Billing & Usage, Settings
-
-- **Account page** (`/account`): three tabs — Profile (avatar initials, name, email, member-since date, plan, real usage counts), Billing & Usage (reads the stored plan field rather than hardcoding "Free"; says plainly that no hosted billing is live yet instead of showing a fake upgrade button), and Settings (edit display name, change password)
-- **Ownership display**: My Research marks each job and bold idea "Yours" or "Unclaimed" — computed server-side, so no other account's id is ever sent to the browser
-- Reachable from a dropdown behind the account name in the top-right corner, alongside Sign out
-
-### V3.3 — Real User Accounts
-
-- **Real sign-in**: email/password accounts with bcrypt-hashed passwords, replacing a sign-in form that previously just faked success after a timeout
-- **Self-hosted-vs-hosted flag** (`REQUIRE_AUTH`): unset by default so a self-hosted instance stays fully usable anonymously; the hosted tier sets it to require an account before starting new research
-- **Ownership, added without breaking anonymous use**: a job or bold idea created while signed in is tied to that account; an unowned one stays exactly as open as before accounts existed — nothing about anonymous usage changed
-- **Claim flow**: a signed-in user can attach a job or bold idea they made anonymously to their account after the fact, so signing up later doesn't orphan earlier work
-- Ownership checks cover the core job/bold-idea routes and their list endpoints; the nested sub-resource routes (notes, notebook, chat, etc.) do not yet check ownership — tracked separately, not yet closed
-
-### V3.2 — License Switch: MIT → AGPL-3.0 (dual licensing)
-
-- Core is now licensed under **GNU AGPL-3.0**: free for everyone including commercial use, but anyone hosting a modified version as a network service must offer users the complete corresponding source
-- **Commercial licenses** available for embedding/hosting without copyleft obligations — see `COMMERCIAL-LICENSE.md`
-- **DCO sign-off** required on all contributions (`git commit -s`) to keep the copyright chain sole-owned — see `CONTRIBUTING.md`
-- All releases before the `v3.2.0` tag remain **MIT-licensed forever**; the switch point is tagged `v3.2.0`
-
-### V3.1 — Graph Deduplication & Explore Header Redesign
-
-- **No more duplicate topics/entities**: every synced entity now uses a label-based global sync key (`g:type:normalized-label`) instead of per-job keys, so the same concept discovered in different runs converges onto one node via the existing upsert
-- **`dedupeGraph()` merge pass**: groups entities by (type, normalized label) and folds each group onto a canonical node — edges and paper links are re-pointed, duplicates deleted (cascades clean up the originals); user-created entities always win the merge, and groups that are purely user-created are left alone as deliberate duplicates; notes are exempt
-- **Dedup runs automatically**: every `syncJobGraph` finishes with the merge pass, and `POST /api/graph/dedupe` can be called anytime to clean up stragglers (idempotent)
-- **Paper deduplication**: source rows are per-run (papers are re-fetched each run), so the graph and query APIs now collapse sources by normalized title when serializing — no repeated titles in inspector source lists or query citations
-- **Explore header redesigned** (UX pass): the old header mixed six button styles with three competing gradients; it's now a quiet ghost-style nav — brand mark (links home) + My Research · Research Graph · Write Paper · Peer Review · Docs, one consistent hover style, color only in the icons — followed by a clean page-identity block ("Topic Explorer" + subtitle), keeping the word cloud as the page's primary call to action; all three themes verified
-
-#### New API routes (V3.1)
-
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/graph/dedupe` | POST | One-shot graph deduplication: normalizes sync keys, merges duplicate groups (returns `{normalized, groups, merged}`) |
-
-### V3.0 — Persistent Research Graph (the infrastructure spine)
-
-- **`GraphEntity` / `GraphEdge` / `EntitySource` Prisma models** (PostgreSQL): a cross-project, cross-domain research graph of hypotheses, methods, evidence, gaps, topics, and notes — persisted in the database instead of per-job localStorage
-- **Automatic sync**: every completed run (and every uploaded-paper job) syncs its knowledge tree into the graph — root topic, hypotheses, methods, findings as evidence, disagreements, and open problems — via an idempotent `syncJobGraph` keyed on `syncKey`; the first visit to `/graph` backfills all past completed runs
-- **`/graph` page**: force-directed visualization of the whole graph with type-coloured nodes (topic / hypothesis / method / evidence / gap / note), type filter chips with live counts, entity search, wheel zoom + drag pan, per-type edge arrows and a relationship legend
-- **Full editing**: add entities (optionally linked to the selected node with a typed edge), inline edit of label/content, delete entities, create/delete edges between any two entities via the inspector's connect-to-entity search
-- **Origin protection**: entities synced from runs are marked *run-derived* and refresh on re-sync; user-created and user-edited entities (white ring on the canvas) are never overwritten by a re-sync
-- **Provenance**: `EntitySource` links every entity to its supporting papers; the inspector lists them and links back to the originating run
-- **Cross-run query** ("what have I learned across all my runs about X"): matches entities case-insensitively across label + content, expands to the 1-hop neighbourhood, and Groq synthesizes a grounded answer with inline entity citations, key takeaways, and open gaps — matched nodes are highlighted on the canvas
-- **Notes migrated into the graph**: all notes APIs (`/api/jobs/[id]/notes/*`) now read/write graph entities; existing localStorage notes migrate automatically on first load per job (one-time flag), and notes participate in cross-run queries like any other entity
-
-#### New API routes (V3.0)
-
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/graph` | GET | Full graph (entities + edges + stats); auto-backfills from completed runs when empty |
-| `/api/graph/entities` | POST | Create a user entity, optionally with an edge to an existing one |
-| `/api/graph/entities/[id]` | PATCH / DELETE | Edit (flips run-derived → user-edited) or delete an entity |
-| `/api/graph/edges` | POST | Create a typed edge between two entities |
-| `/api/graph/edges/[id]` | DELETE | Delete an edge |
-| `/api/graph/sync` | POST | Re-sync one job (`{jobId}`) or all completed jobs |
-| `/api/graph/query` | POST | Cross-run natural-language query with Groq synthesis + citations |
-| `/api/jobs/[id]/notes` | GET / POST | Notes list / create — now backed by graph entities |
-| `/api/jobs/[id]/notes/[noteId]` | PATCH / DELETE | Edit / delete a note entity |
-| `/api/jobs/[id]/notes/migrate` | POST | One-time bulk import of legacy localStorage notes |
-| `/api/jobs/[id]/notes/replace` | POST | Full notes replace (delete missing, upsert incoming) |
-
-### V2.5 — Standalone Peer Review Session & Explore Upload Control
-
-- **Standalone Peer Review session** at `/review`: a committee of three reviewer agents (methodology & novelty, venue fit & impact, statistical rigor & reproducibility) plus an optional custom reviewer with a user-defined name and persona
-- **Venue-aware grading**: pick a publisher/venue preset, or paste a call-for-papers URL — the app scrapes the page, extracts the venue's stated review criteria and focus, and every agent reviews against them
-- **Flexible paper source**: defaults to your current Write Paper draft (latest ARS chat), or upload any `.pdf` / `.txt` / `.md` for text-only extraction
-- **Final verdict panel**: averaged 1–10 scores across five criteria, consensus recommendation, editor-style meta-review, and full per-agent reviews — cached in localStorage
-- **Upload control moved**: the "Start from your own paper" section is gone; a compact upload icon button now sits in the topic search row before Search, with a "Start from your own paper" hover tooltip
-- **Visual polish**: Explore heading gradients redesigned across all three themes for full letter visibility; Peer Review recolored emerald→teal to distinguish it from Write Paper
-- Step 6 (review) removed from the Write Paper pipeline — review now lives entirely on `/review`
-
-#### New API routes (V2.5)
-
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/paper-review` | POST | Run reviewer-agent committee + meta-review (moved from `/api/jobs/[id]/paper-review`) |
-| `/api/jobs/upload` | POST | Now supports `textOnly=1` for paper text extraction without creating a job |
-
-### V2.4 — Comprehension Quiz, UI Polish & Prisma Pool Fix
-
-- **"Test Your Understanding" quiz** on every knowledge tree node: click the button in NodeDetail to generate 4 multiple-choice questions grounded in the actual papers and findings discovered for that node — powered by Groq; includes per-question feedback and a score summary screen
-- **Paper Quiz** in the Paper Pipeline: a "Quiz" button in the step tabs bar generates 4 comprehension questions drawn from the job's real evidence — root node synthesis, child subtopic findings, and linked peer-reviewed paper abstracts; slide-in panel with the same question flow and scoring
-- Questions are strictly grounded in the actual evidence: a dedicated system prompt instructs Groq never to introduce concepts outside the provided content block; each finding, method, paper, and subtopic is labelled (F#/M#/P#/S#) and every question must cite a specific label — eliminating hallucinated generic questions
-- **Subscribe button** on the Explore page replaced with a compact bell icon (same action; saves space in the selected-topic card)
-- **"Explore Papers" button** in the Knowledge Tree simplified to "Explore"
-- **Prisma P2024 fix**: `prisma.ts` now appends `connection_limit=5&pool_timeout=30` to `DATABASE_URL` at startup (if not already set), preventing connection pool exhaustion under dev hot-reloads and concurrent requests
-
-#### New API routes (V2.4)
-
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/nodes/[nodeId]/questions` | GET | Generate 4 MCQs from node content + linked paper snippets |
-| `/api/jobs/[id]/questions` | POST | Generate 4 MCQs from job evidence (root node, subtopics, sources) |
-
-### V2.3 — Node-Aware Explore Papers & Weekly Paper Subscription
-
-- **Node-aware Explore Papers** (Knowledge Tree): clicking a tree node sets it as the active search topic (shown as an indigo chip in the toolbar); "Explore Papers" fetches papers ranked specifically for that node's label rather than the job root topic
-- **Explore toggle** (word cloud page): a pill toggle (default OFF) switches the word cloud from "launch research" mode to "subscribe" mode — clicking a word in Explore mode shows a subscribe card instead of navigating to a job
-- **Weekly paper subscription**: Subscribe button in the Knowledge Tree toolbar and the Explore page opens a popup with:
-  - Topic chip (auto-filled from selected node or searched term)
-  - Email input
-  - Papers per week selector: 5 / 10 / 20
-  - Delivery time picker: 8 AM / 12 PM / 6 PM / 9 PM (every Monday)
-- **Immediate first digest**: on subscribe, the API fetches the top N ranked papers for the topic right now and emails them instantly via Resend — same styled HTML digest as the weekly version
-- **Weekly digest cron**: `vercel.json` registers a Vercel Cron (`0 * * * 1` — every hour on Mondays) that calls `GET /api/cron/weekly-digest`; the route matches subscriptions by delivery time (UTC hour), fetches fresh papers, and sends the weekly digest email
-- **One-click unsubscribe**: every digest email contains a tokenised unsubscribe link (`/api/subscriptions/unsubscribe?token=...`) that deletes the subscription and redirects to a branded `/unsubscribed` confirmation page (handles success, already-used, and error states)
-- **Latest papers only**: OpenAlex and PubMed queries are now filtered to the last 2 years (`currentYear-2` to `currentYear`) with `sort=publication_date:desc`; recency scoring window tightened from 10 years to 2 years so 2026 papers rank first
-- **Email shows exact subscribe time**: the digest banner includes the timestamp when the user clicked Subscribe and the paper year range (e.g. "2025–2026")
-- **`PaperSubscription` model**: stores `email`, `topic`, `frequency`, `deliveryTime`, `unsubToken` (unique cuid for unsubscribe links), `createdAt`
-- **Shared `fetchTopicPapers()` utility** (`src/lib/fetchTopicPapers.ts`): extracted from the search-papers route so both in-app Explore Papers and email digests use the same ranking logic
-
-#### Required environment variables (new in V2.3)
-
-| Variable | Purpose |
-|---|---|
-| `RESEND_API_KEY` | Resend API key for sending digest and confirmation emails |
-| `NEXT_PUBLIC_APP_URL` | App base URL used in email links (e.g. `http://localhost:3000` for dev, your Vercel URL for prod) |
-
-### V2.2 — Notes System, Find Papers & Knowledge Tree Paper Exploration
-
-- **Persistent notes system**: all notes stored in `localStorage` per job, synced across tabs via `atlas:notes-update` event; shared by NotesPanel, NotesTab, PaperMap compare, and Topic Copilot
-- **Floating NotesPanel**: slide-in drawer (bottom-right) with entry list, type badges (session / manual / comparison / insight), expand/collapse, delete, textarea + Add Note, Export .md
-- **Dedicated Notes tab**: 2-column layout — entry timeline left, detail viewer / composer right; session memory card shows topic + entry counts; quick-capture labels; inline edit & delete
-- **Paper compare → notes**: Save to Notes button in compare panel writes a structured markdown comparison directly into the session notes
-- **Topic Workspace redesign**: removed Pages sidebar; inline action toolbar (Write Paper · Export .md · Converge · Save to Notes) replaces floating bottom-right buttons; prominent "Type a topic and press Enter…" input at top of sidebar
-- **Write Paper — Find Papers tab**: editable description field (defaults to job topic), "Explore Papers" button searches OpenAlex + PubMed, results ranked by relevance + recency (65 / 35 blend)
-- **Knowledge Tree — Explore Papers**: new button in toolbar fetches related papers and displays them below the tree as a card grid; each card shows a **node-connection badge** (colour-matched to tree depth) indicating which tree node the paper connects to
-- **Relevance + recency ranking**: title match (×4) + abstract match (×1) + title-start bonus (×3), blended with a 10-year recency window; applies to all paper search endpoints
-- **Layout fixes**: NotebookTab and NotesTab now fill full viewport width; floating Write Paper / Export buttons moved to inline toolbar
-- Write Paper: floating Notes panel + ← Back button in header
-
-### V2.1 — Smart Explore, Hub-Spoke Paper Map & Paper Comparison
-- **Custom topic search**: type 2–5 words, click Search → Groq generates a live word cloud with your keyword pinned at center and 16 related terms around it
-- **Area / industry selector**: General (cross-domain, default), Biology, Chemistry, Technology, Finance — word cloud updates per domain; General triggers LLM keyword generation
-- **Hub-and-spoke Paper Map**: Research hub at center with weighted lines to every paper (line width & opacity = knowledge-node count); no peer-to-peer lines cluttering the graph
-- **Paper Compare Mode**: select any 2 papers → Claude returns a structured comparison of (1) methodology differences and (2) research gaps, with a combined-opportunity insight
-- **Richer paper detail panel**: full abstract, publication year, stats row, "Read Paper ↗" button, venue + year on related papers
-- Pricing: free & open-source; $100 / paper for hosted workflow with managed tokens
-
-### V2 — Paper Pipeline + ARS Integration
-- In-app Socratic planning chat integrating the Academic Research Skills (ARS) Claude Code plugin — replaced by the original Atlas Plan in V3.0.0.1; see "Acknowledgments and prior art"
-- Idea selection from converged ideas, knowledge tree nodes, or raw topic
-- Paper Outline generation via Groq (IMRaD structure)
-- `/jobs` research management page: list, view, write, delete all past runs
-- Knowledge Tree, Notebook, and Paper Map accessible directly from the paper session
-
-### V1 — Evidence Mapping & Knowledge Tree
-- Word cloud topic explorer across Biology, Chemistry, Technology, and Finance
-- Real-time knowledge tree built from peer-reviewed papers, datasets, and social signals
-- Reliability-tiered Paper Map (SVG network graph)
-- Notebook & Topic Copilot with AI-assisted brainstorm and Converge to Top 3
-
----
-
-## Contributing
-
-See `CONTRIBUTING.md`.
-
-## Security
-
-See `SECURITY.md` for responsible disclosure.
-
----
-
-## License
-
-### Hypothesis Atlas
-
-Dual-licensed — your choice of **GNU AGPL-3.0** (copyleft; see `LICENSE`) or a **commercial license** for use without copyleft obligations (see `COMMERCIAL-LICENSE.md`). All releases before the `v3.2.0` tag remain MIT-licensed forever. Contributions require DCO sign-off — see `CONTRIBUTING.md`.
-
-### Enterprise (`ee/`)
-
-Enterprise features (SSO, role-based access, audit logs, data retention) live in [`ee/`](ee/) and are source-available under the [Widsith Enterprise License](ee/LICENSE.md) (draft — pending legal review): you can read and audit the code, but production use requires a paid subscription and license key. The core outside `ee/` stays AGPL-3.0 forever; enterprise features are additive — core functionality will never move behind pay.
-
-V2 of this app (before the `V3.0.0.1` tag) integrated the [Academic Research Skills](https://github.com/Imbad0202/academic-research-skills) plugin, originally created by **Cheng-I Wu** and licensed under **CC-BY-NC 4.0**. That integration was removed in V3.0.0.1 and replaced with Atlas Plan, an original implementation — see "Acknowledgments and prior art" above. Releases tagged before `V3.0.0.1` keep their ARS attribution and remain subject to CC-BY-NC 4.0 for that integrated code.
+<div align="center">
+<sub>Made with care for researchers · <a href="CHANGELOG.md">Changelog</a> · <a href="https://github.com/widsith-ai/hypothesis-atlas/issues">Issues</a></sub>
+</div>
