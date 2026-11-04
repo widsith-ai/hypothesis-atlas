@@ -101,6 +101,30 @@ export interface OpenModelKeyOptions {
   continueTo?: string;
 }
 
+/** What GET /api/llm reports (#88, #91). */
+export interface ServerLLMInfo {
+  serverModel: { provider: string; model: string } | null;
+  edition: "hosted" | "self-hosted";
+  /** Whether to actively offer "bring your own key" (Explorer gate, Model key pill, menu item). */
+  offerUserKeys: boolean;
+}
+
+let serverInfoPromise: Promise<ServerLLMInfo | null> | null = null;
+
+/** Fetched once per page load and shared by every caller. Null if the server couldn't be reached. */
+export function fetchServerLLMInfo(): Promise<ServerLLMInfo | null> {
+  if (!serverInfoPromise) {
+    serverInfoPromise = fetch("/api/llm")
+      .then((r) => (r.ok ? (r.json() as Promise<ServerLLMInfo>) : null))
+      .catch(() => null)
+      .then((info) => {
+        if (!info) serverInfoPromise = null; // let a later caller retry
+        return info;
+      });
+  }
+  return serverInfoPromise;
+}
+
 export function openModelKeyDialog(opts: OpenModelKeyOptions = {}) {
   window.dispatchEvent(new CustomEvent<OpenModelKeyOptions>(OPEN_MODEL_KEY_EVENT, { detail: opts }));
 }

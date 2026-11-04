@@ -9,10 +9,12 @@ import {
   OPEN_MODEL_KEY_EVENT,
   clearLLMConfig,
   getActiveLLMConfig,
+  fetchServerLLMInfo,
   installLLMFetch,
   markDefaultModelChosen,
   saveLLMConfig,
   type OpenModelKeyOptions,
+  type ServerLLMInfo,
   type StoredLLMConfig,
 } from "@/lib/llmClientConfig";
 
@@ -23,9 +25,7 @@ import {
  * "not configured" message) and on Account → Settings.
  */
 
-interface ServerInfo {
-  serverModel: { provider: string; model: string } | null;
-}
+type ServerInfo = ServerLLMInfo;
 
 /** Select value for "type my own model name". Not a valid model id, so it can't collide. */
 const OTHER_MODEL = "__other__";
@@ -48,6 +48,19 @@ export function useActiveLLMConfig(): StoredLLMConfig | null {
   return config;
 }
 
+/** #91: server edition info, or null while loading / unreachable. */
+export function useServerLLMInfo(): ServerInfo | null {
+  const [info, setInfo] = useState<ServerInfo | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchServerLLMInfo().then((data) => alive && setInfo(data));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return info;
+}
+
 export function describeLLMConfig(config: StoredLLMConfig | null): string {
   if (!config) return "Using the server's model";
   const label = getProviderInfo(config.provider)?.label ?? config.provider;
@@ -68,10 +81,7 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    fetch("/api/llm")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: ServerInfo | null) => data && setServer(data))
-      .catch(() => {});
+    fetchServerLLMInfo().then((data) => data && setServer(data));
   }, []);
 
   // Prefill from what's saved; the key field is prefilled too so "Test" and
@@ -296,10 +306,7 @@ export function ModelKeyDialogHost() {
   // Only needed for the "continue with the default model" option.
   useEffect(() => {
     if (!open || !continueTo) return;
-    fetch("/api/llm")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: ServerInfo | null) => setServerHasModel(Boolean(data?.serverModel)))
-      .catch(() => setServerHasModel(false));
+    fetchServerLLMInfo().then((data) => setServerHasModel(Boolean(data?.serverModel)));
   }, [open, continueTo]);
 
   const close = () => {
