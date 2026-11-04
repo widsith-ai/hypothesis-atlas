@@ -13,6 +13,8 @@ function lightness(hex: string): number {
   return 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
 }
 
+const GREYS = new Set(["gray", "zinc", "slate", "neutral", "stone"]);
+
 describe("art-style palettes (#87)", () => {
   const monetVars = paletteBase[":root"];
   const inkVars = paletteBase[':root[data-style="ink"]'];
@@ -28,12 +30,20 @@ describe("art-style palettes (#87)", () => {
     for (const ref of refs) expect(monetVars).toHaveProperty(ref);
   });
 
-  it("keeps each Monet shade at the ink shade's lightness, so contrast is unchanged", () => {
+  it("keeps each Monet shade at the ink shade's lightness (secondary-text greys darker), so contrast never drops", () => {
     for (const fam of Object.keys(ink.familyMap) as (keyof typeof ink.familyMap)[]) {
       const inkScale = ink.familyMap[fam] as Record<number, string>;
       const monetScale = monet.familyMap[fam] as Record<number, string>;
       for (const shade of Object.keys(inkScale)) {
-        expect(Math.abs(lightness(monetScale[+shade]) - lightness(inkScale[+shade])), `${fam}-${shade}`).toBeLessThan(0.005);
+        const diff = lightness(monetScale[+shade]) - lightness(inkScale[+shade]);
+        // Monet's secondary-text greys (500–700) are deliberately a step darker
+        // (#90): more contrast on light glass, never less. Everything else matches.
+        if (GREYS.has(fam) && ["500", "600", "700"].includes(shade)) {
+          expect(diff, `${fam}-${shade}`).toBeLessThan(0);
+          expect(diff, `${fam}-${shade}`).toBeGreaterThan(-0.08);
+        } else {
+          expect(Math.abs(diff), `${fam}-${shade}`).toBeLessThan(0.005);
+        }
       }
     }
   });

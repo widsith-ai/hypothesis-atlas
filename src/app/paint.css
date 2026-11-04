@@ -757,3 +757,347 @@ h1, h2, h3, .font-display {
     font-style: italic;
   }
 }
+
+/* ── Glass: the painting shows through every panel — Monet (#90) ────────────
+ * No opaque white in the Monet style. Every light panel (bg-white, the pale
+ * grey and pale colour tints) keeps its own faint tint but turns translucent,
+ * with a frosted blur so text stays readable: grey reads as lilac glass,
+ * indigo-50 as a cobalt wash, red-50 as a rose wash, and so on. Tailwind
+ * builds these colours as rgb(var(--c-…) / var(--tw-bg-opacity)), so lowering
+ * the opacity variable is enough. Dark panels (code blocks, dark-mode cards)
+ * become deep indigo glass the same way. Floating layers (menus, popovers,
+ * modals) stay more opaque, since they sit over other content. */
+
+:root[data-style="monet"] {
+  --monet-glass-blur: blur(9px) saturate(1.15);
+  --monet-halo-light: 0 0 1px rgb(251 251 248 / 0.45), 0 0 12px rgb(251 251 248 / 0.55);
+  --monet-halo-dark: 0 0 1px rgb(17 17 34 / 0.5), 0 0 12px rgb(17 17 34 / 0.6);
+
+  :is(div, section, aside, nav, header, footer, main, article, form, fieldset, li, ul, ol, dl, details, summary, table, thead, tbody, tr, td, th, pre, blockquote, label, input, textarea, select):is(
+    [class~="bg-white"],
+    [class~="bg-gray-50"],
+    [class~="bg-gray-100"],
+    [class~="bg-zinc-50"],
+    [class~="bg-zinc-100"],
+    [class~="bg-slate-50"],
+    [class~="bg-slate-100"],
+    [class~="bg-neutral-50"],
+    [class~="bg-neutral-100"],
+    [class~="bg-stone-50"],
+    [class~="bg-stone-100"],
+    [class~="bg-blue-50"],
+    [class~="bg-blue-100"],
+    [class~="bg-indigo-50"],
+    [class~="bg-indigo-100"],
+    [class~="bg-sky-50"],
+    [class~="bg-sky-100"],
+    [class~="bg-cyan-50"],
+    [class~="bg-cyan-100"],
+    [class~="bg-purple-50"],
+    [class~="bg-purple-100"],
+    [class~="bg-violet-50"],
+    [class~="bg-violet-100"],
+    [class~="bg-red-50"],
+    [class~="bg-red-100"],
+    [class~="bg-rose-50"],
+    [class~="bg-rose-100"],
+    [class~="bg-pink-50"],
+    [class~="bg-pink-100"],
+    [class~="bg-fuchsia-50"],
+    [class~="bg-fuchsia-100"],
+    [class~="bg-green-50"],
+    [class~="bg-green-100"],
+    [class~="bg-emerald-50"],
+    [class~="bg-emerald-100"],
+    [class~="bg-teal-50"],
+    [class~="bg-teal-100"],
+    [class~="bg-lime-50"],
+    [class~="bg-lime-100"],
+    [class~="bg-amber-50"],
+    [class~="bg-amber-100"],
+    [class~="bg-orange-50"],
+    [class~="bg-orange-100"],
+    [class~="bg-yellow-50"],
+    [class~="bg-yellow-100"]
+  ) {
+    --tw-bg-opacity: 0.34;
+    text-shadow: var(--monet-halo-light);
+    -webkit-backdrop-filter: var(--monet-glass-blur);
+            backdrop-filter: var(--monet-glass-blur);
+  }
+
+  /* Fixed-alpha light panels (bg-white/80 …) */
+  :is(div, section, aside, nav, header, footer, main, article, form, fieldset, li, ul, ol, dl, details, summary, table, thead, tbody, tr, td, th, pre, blockquote, label, input, textarea, select)[class*="bg-white/"] {
+    background-color: rgb(var(--c-white) / 0.34);
+    text-shadow: var(--monet-halo-light);
+    -webkit-backdrop-filter: var(--monet-glass-blur);
+            backdrop-filter: var(--monet-glass-blur);
+  }
+
+  /* Light buttons and pills (Sign in, chips, secondary buttons): glass too. */
+  :is(button, a):is(
+    [class~="bg-white"],
+    [class~="bg-gray-50"],
+    [class~="bg-gray-100"],
+    [class~="bg-zinc-50"],
+    [class~="bg-zinc-100"],
+    [class~="bg-slate-50"],
+    [class~="bg-slate-100"],
+    [class~="bg-neutral-50"],
+    [class~="bg-neutral-100"],
+    [class~="bg-stone-50"],
+    [class~="bg-stone-100"],
+    [class~="bg-blue-50"],
+    [class~="bg-blue-100"],
+    [class~="bg-indigo-50"],
+    [class~="bg-indigo-100"],
+    [class~="bg-sky-50"],
+    [class~="bg-sky-100"],
+    [class~="bg-cyan-50"],
+    [class~="bg-cyan-100"],
+    [class~="bg-purple-50"],
+    [class~="bg-purple-100"],
+    [class~="bg-violet-50"],
+    [class~="bg-violet-100"],
+    [class~="bg-red-50"],
+    [class~="bg-red-100"],
+    [class~="bg-rose-50"],
+    [class~="bg-rose-100"],
+    [class~="bg-pink-50"],
+    [class~="bg-pink-100"],
+    [class~="bg-fuchsia-50"],
+    [class~="bg-fuchsia-100"],
+    [class~="bg-green-50"],
+    [class~="bg-green-100"],
+    [class~="bg-emerald-50"],
+    [class~="bg-emerald-100"],
+    [class~="bg-teal-50"],
+    [class~="bg-teal-100"],
+    [class~="bg-lime-50"],
+    [class~="bg-lime-100"],
+    [class~="bg-amber-50"],
+    [class~="bg-amber-100"],
+    [class~="bg-orange-50"],
+    [class~="bg-orange-100"],
+    [class~="bg-yellow-50"],
+    [class~="bg-yellow-100"]
+  ) {
+    --tw-bg-opacity: 0.5;
+    -webkit-backdrop-filter: var(--monet-glass-blur);
+            backdrop-filter: var(--monet-glass-blur);
+  }
+  :is(button, a)[class*="bg-white/"] {
+    background-color: rgb(var(--c-white) / 0.5);
+  }
+
+  /* In the dark scene, a pale panel over the night painting would turn muddy
+     grey at glass opacity: keep it a light, mostly opaque wash instead. */
+  :is(.ink-night, .ink-plain[class~="bg-[#12100e]"]) :is(div, section, aside, main, article, form, li, table, td, th):is([class~="bg-white"], [class~="bg-gray-50"], [class~="bg-zinc-50"], [class~="bg-slate-50"]) {
+    --tw-bg-opacity: 0.8;
+  }
+
+  /* Hover tints stay glass instead of flashing solid. */
+  :is(
+    [class*="hover:bg-white"]:hover,
+    [class*="hover:bg-gray-50"]:hover,
+    [class*="hover:bg-gray-100"]:hover,
+    [class*="hover:bg-zinc-50"]:hover,
+    [class*="hover:bg-zinc-100"]:hover,
+    [class*="hover:bg-slate-50"]:hover,
+    [class*="hover:bg-slate-100"]:hover,
+    [class*="hover:bg-neutral-50"]:hover,
+    [class*="hover:bg-neutral-100"]:hover,
+    [class*="hover:bg-stone-50"]:hover,
+    [class*="hover:bg-stone-100"]:hover,
+    [class*="hover:bg-blue-50"]:hover,
+    [class*="hover:bg-blue-100"]:hover,
+    [class*="hover:bg-indigo-50"]:hover,
+    [class*="hover:bg-indigo-100"]:hover,
+    [class*="hover:bg-sky-50"]:hover,
+    [class*="hover:bg-sky-100"]:hover,
+    [class*="hover:bg-cyan-50"]:hover,
+    [class*="hover:bg-cyan-100"]:hover,
+    [class*="hover:bg-purple-50"]:hover,
+    [class*="hover:bg-purple-100"]:hover,
+    [class*="hover:bg-violet-50"]:hover,
+    [class*="hover:bg-violet-100"]:hover,
+    [class*="hover:bg-red-50"]:hover,
+    [class*="hover:bg-red-100"]:hover,
+    [class*="hover:bg-rose-50"]:hover,
+    [class*="hover:bg-rose-100"]:hover,
+    [class*="hover:bg-pink-50"]:hover,
+    [class*="hover:bg-pink-100"]:hover,
+    [class*="hover:bg-fuchsia-50"]:hover,
+    [class*="hover:bg-fuchsia-100"]:hover,
+    [class*="hover:bg-green-50"]:hover,
+    [class*="hover:bg-green-100"]:hover,
+    [class*="hover:bg-emerald-50"]:hover,
+    [class*="hover:bg-emerald-100"]:hover,
+    [class*="hover:bg-teal-50"]:hover,
+    [class*="hover:bg-teal-100"]:hover,
+    [class*="hover:bg-lime-50"]:hover,
+    [class*="hover:bg-lime-100"]:hover,
+    [class*="hover:bg-amber-50"]:hover,
+    [class*="hover:bg-amber-100"]:hover,
+    [class*="hover:bg-orange-50"]:hover,
+    [class*="hover:bg-orange-100"]:hover,
+    [class*="hover:bg-yellow-50"]:hover,
+    [class*="hover:bg-yellow-100"]:hover
+  ) {
+    --tw-bg-opacity: 0.62;
+  }
+
+  /* Dark panels: code blocks, terminals, dark-mode cards → deep indigo glass. */
+  :is(div, section, aside, nav, header, footer, main, article, form, fieldset, li, ul, ol, dl, details, summary, table, thead, tbody, tr, td, th, pre, blockquote, label, input, textarea, select):is(
+    [class~="bg-gray-800"],
+    [class~="bg-gray-900"],
+    [class~="bg-gray-950"],
+    [class~="bg-zinc-800"],
+    [class~="bg-zinc-900"],
+    [class~="bg-zinc-950"],
+    [class~="bg-slate-800"],
+    [class~="bg-slate-900"],
+    [class~="bg-slate-950"],
+    [class~="bg-neutral-800"],
+    [class~="bg-neutral-900"],
+    [class~="bg-neutral-950"],
+    [class~="bg-stone-800"],
+    [class~="bg-stone-900"],
+    [class~="bg-stone-950"],
+    [class~="bg-black"]
+  ) {
+    --tw-bg-opacity: 0.62;
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+            backdrop-filter: blur(10px) saturate(1.2);
+  }
+  :is(div, section, aside, nav, header, footer, main, article, form, fieldset, li, ul, ol, dl, details, summary, table, thead, tbody, tr, td, th, pre, blockquote, label, input, textarea, select):is([class*="bg-zinc-900/"], [class*="bg-zinc-800/"], [class*="bg-zinc-950/"], [class*="bg-gray-900/"], [class*="bg-gray-800/"]) {
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+            backdrop-filter: blur(10px) saturate(1.2);
+  }
+
+  /* Fixed-alpha dark panels (bg-zinc-900/80 …): the same night glass. */
+  :is(div, section, aside, nav, header, main, article, form, li, table, pre)[class*="bg-zinc-800/"]:not([class*="hover:bg-zinc-800/"]) { background-color: rgb(var(--c-zinc-800) / 0.58); }
+  :is(div, section, aside, nav, header, main, article, form, li, table, pre)[class*="bg-zinc-900/"]:not([class*="hover:bg-zinc-900/"]) { background-color: rgb(var(--c-zinc-900) / 0.58); }
+  :is(div, section, aside, nav, header, main, article, form, li, table, pre)[class*="bg-zinc-950/"]:not([class*="hover:bg-zinc-950/"]) { background-color: rgb(var(--c-zinc-950) / 0.58); }
+  :is(div, section, aside, nav, header, main, article, form, li, table, pre)[class*="bg-gray-800/"]:not([class*="hover:bg-gray-800/"]) { background-color: rgb(var(--c-gray-800) / 0.58); }
+  :is(div, section, aside, nav, header, main, article, form, li, table, pre)[class*="bg-gray-900/"]:not([class*="hover:bg-gray-900/"]) { background-color: rgb(var(--c-gray-900) / 0.58); }
+  :is(div, section, aside, nav, header, main, article, form, li, table, pre)[class*="bg-gray-950/"]:not([class*="hover:bg-gray-950/"]) { background-color: rgb(var(--c-gray-950) / 0.58); }
+
+  /* Floating layers sit over other content: more opaque, stronger blur. */
+  :is([class~="absolute"], [class~="fixed"], [role="dialog"], [role="menu"], [role="listbox"]):is(
+    [class~="bg-white"],
+    [class~="bg-gray-50"],
+    [class~="bg-gray-100"],
+    [class~="bg-zinc-50"],
+    [class~="bg-zinc-100"],
+    [class~="bg-slate-50"],
+    [class~="bg-slate-100"],
+    [class~="bg-neutral-50"],
+    [class~="bg-neutral-100"],
+    [class~="bg-stone-50"],
+    [class~="bg-stone-100"],
+    [class~="bg-blue-50"],
+    [class~="bg-blue-100"],
+    [class~="bg-indigo-50"],
+    [class~="bg-indigo-100"],
+    [class~="bg-sky-50"],
+    [class~="bg-sky-100"],
+    [class~="bg-cyan-50"],
+    [class~="bg-cyan-100"],
+    [class~="bg-purple-50"],
+    [class~="bg-purple-100"],
+    [class~="bg-violet-50"],
+    [class~="bg-violet-100"],
+    [class~="bg-red-50"],
+    [class~="bg-red-100"],
+    [class~="bg-rose-50"],
+    [class~="bg-rose-100"],
+    [class~="bg-pink-50"],
+    [class~="bg-pink-100"],
+    [class~="bg-fuchsia-50"],
+    [class~="bg-fuchsia-100"],
+    [class~="bg-green-50"],
+    [class~="bg-green-100"],
+    [class~="bg-emerald-50"],
+    [class~="bg-emerald-100"],
+    [class~="bg-teal-50"],
+    [class~="bg-teal-100"],
+    [class~="bg-lime-50"],
+    [class~="bg-lime-100"],
+    [class~="bg-amber-50"],
+    [class~="bg-amber-100"],
+    [class~="bg-orange-50"],
+    [class~="bg-orange-100"],
+    [class~="bg-yellow-50"],
+    [class~="bg-yellow-100"]
+  ) {
+    --tw-bg-opacity: 0.8;
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+            backdrop-filter: blur(20px) saturate(1.2);
+  }
+  :is([class~="absolute"], [class~="fixed"], [role="dialog"], [role="menu"], [role="listbox"])[class*="bg-white/"] {
+    background-color: rgb(var(--c-white) / 0.8);
+  }
+
+  /* Fields with no background class of their own (browser default white). */
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), textarea, select):not([class*="bg-"]) {
+    background-color: rgb(var(--c-white) / 0.5);
+    -webkit-backdrop-filter: var(--monet-glass-blur);
+            backdrop-filter: var(--monet-glass-blur);
+  }
+
+  /* Text over brushwork: a soft halo in the scene's own light (light scenes)
+     or haze (dark scene), inherited by everything on the page; anything on
+     a solid dark fill or a paint-dab button drops it. */
+  body, .ink-paper, .ink-jade {
+    text-shadow: var(--monet-halo-light);
+  }
+  .ink-night, .ink-plain[class~="bg-[#12100e]"] {
+    text-shadow: var(--monet-halo-dark);
+  }
+  :is(button, a, pre, code, kbd, svg, input, textarea, select),
+  :is([class~="bg-gray-800"],
+    [class~="bg-gray-900"],
+    [class~="bg-gray-950"],
+    [class~="bg-zinc-800"],
+    [class~="bg-zinc-900"],
+    [class~="bg-zinc-950"],
+    [class~="bg-slate-800"],
+    [class~="bg-slate-900"],
+    [class~="bg-slate-950"],
+    [class~="bg-neutral-800"],
+    [class~="bg-neutral-900"],
+    [class~="bg-neutral-950"],
+    [class~="bg-stone-800"],
+    [class~="bg-stone-900"],
+    [class~="bg-stone-950"],
+    [class~="bg-black"]),
+  :is([class*="bg-zinc-900/"], [class*="bg-zinc-800/"], [class*="bg-zinc-950/"]) {
+    text-shadow: none;
+  }
+}
+
+/* ── Word cloud colours (src/components/WordCloud.tsx) ─────────────────── */
+:root {
+  --wc-center: rgb(var(--c-blue-600));
+  --wc-1: rgb(var(--c-blue-500));
+  --wc-2: rgb(var(--c-purple-600));
+  --wc-3: rgb(var(--c-red-500));
+  --wc-4: rgb(var(--c-cyan-500));
+  --wc-5: rgb(var(--c-purple-500));
+  --wc-6: rgb(var(--c-amber-500));
+  --wc-7: rgb(var(--c-green-500));
+  --wc-8: rgb(var(--c-red-600));
+}
+/* Monet at night: the same pigments, lifted so they read on indigo glass. */
+:root[data-style="monet"] .ink-night {
+  --wc-center: rgb(var(--c-blue-300));
+  --wc-1: rgb(var(--c-blue-300));
+  --wc-2: rgb(var(--c-purple-300));
+  --wc-3: rgb(var(--c-red-300));
+  --wc-4: rgb(var(--c-cyan-300));
+  --wc-5: rgb(var(--c-purple-200));
+  --wc-6: rgb(var(--c-amber-300));
+  --wc-7: rgb(var(--c-green-300));
+  --wc-8: rgb(var(--c-red-200));
+}

@@ -8,7 +8,7 @@
  * every text/background pairing keeps its contrast when the user switches
  * style — only hue and chroma change (src/lib/palette.test.ts checks this).
  *
- *   gray / zinc / slate / neutral / stone → lilac grey (violet shadow, never black)
+ *   gray / zinc / slate / neutral / stone → Prussian-blue grey (blue shadow, never black)
  *   blue / indigo                         → cobalt
  *   sky / cyan                            → cerulean
  *   purple / violet                       → mauve
@@ -20,20 +20,22 @@
  * must keep the lightness within the test's tolerance.
  */
 
-/** Lilac grey — Monet painted shadow as violet, never black: the dark end
- *  deepens toward indigo-violet rather than going neutral. */
+/** Prussian-blue grey — Monet painted shadow as blue and violet, never black
+ *  or neutral grey. All body and secondary text uses this scale. 500–700 (the
+ *  usual secondary-text shades) sit a step darker than their ink twins, so
+ *  text stays readable over glass panels and brushwork (#90). */
 export const lilacGrey = {
-  50: "#f3f4fa",
-  100: "#eaeaf2",
-  200: "#d8d9e2",
-  300: "#bfc0cb",
-  400: "#989aa9",
-  500: "#737587",
-  600: "#56576c",
-  700: "#3d3e57",
-  800: "#282844",
-  900: "#191934",
-  950: "#0f0e24",
+  50: "#f2f4fa",
+  100: "#e8ebf3",
+  200: "#d5dae3",
+  300: "#bbc1ce",
+  400: "#929bae",
+  500: "#5d6880",
+  600: "#3d4862",
+  700: "#2a3652",
+  800: "#1e2a49",
+  900: "#101b38",
+  950: "#071027",
 };
 
 /** Cobalt blue — pond depths and evening water. */
@@ -126,9 +128,9 @@ export const chrome = {
   950: "#2b1700",
 };
 
-/** Primed-canvas white and violet-black, replacing pure #fff / #000. */
+/** Primed-canvas white and Prussian-blue black, replacing pure #fff / #000. */
 export const canvas = "#fbfbf8";
-export const violetBlack = "#0f0e24";
+export const violetBlack = "#060d22";
 
 /** Tailwind family → Monet pigment. Used by src/lib/palette.ts. */
 export const familyMap = {
