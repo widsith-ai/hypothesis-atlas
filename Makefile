@@ -19,7 +19,7 @@ help:
 	@echo "  make build              Build Next.js app"
 	@echo "  make start              Start production Next.js server"
 	@echo "  make lint               Run lint checks"
-	@echo "  make test               Placeholder (no tests configured)"
+	@echo "  make test               Run the test suite (Vitest)"
 	@echo "  make deploy-preview     Deploy preview to Vercel"
 	@echo "  make deploy-web         Deploy production web app to Vercel"
 	@echo "  make deploy-worker-note Print worker deployment reminder"
@@ -75,7 +75,7 @@ lint:
 	npm run lint
 
 test:
-	@echo "No automated test suite configured for this repository."
+	npm test
 
 deploy-preview:
 	npx vercel --yes
