@@ -76,3 +76,39 @@ describe('generateWithGroq with a mocked client', () => {
     expect(result.summary).toContain('unavailable')
   })
 })
+
+describe('streamGroqChat cancellation (#105)', () => {
+  const createMock = vi.fn()
+
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    process.env.GROQ_API_KEY = 'test-key'
+    vi.doMock('groq-sdk', () => ({
+      default: vi.fn().mockImplementation(() => ({ chat: { completions: { create: createMock } } })),
+    }))
+  })
+
+  it('stops pulling tokens from the model once the client cancels (Stop)', async () => {
+    let pulled = 0
+    createMock.mockResolvedValue(
+      (async function* () {
+        for (let i = 0; i < 50; i++) {
+          pulled++
+          await new Promise((r) => setTimeout(r, 2))
+          yield { choices: [{ delta: { content: `t${i} ` } }] }
+        }
+      })(),
+    )
+    const { streamGroqChat } = await import('./groq')
+    const stream = await streamGroqChat([{ role: 'user', content: 'hi' }], 'system')
+    const reader = stream!.getReader()
+    const first = await reader.read()
+    expect(new TextDecoder().decode(first.value)).toContain('t0')
+    await reader.cancel()
+    const pulledAtCancel = pulled
+    await new Promise((r) => setTimeout(r, 40))
+    expect(pulled).toBeLessThanOrEqual(pulledAtCancel + 1)
+    expect(pulled).toBeLessThan(50)
+  })
+})

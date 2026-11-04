@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AssistantChat from "@/components/AssistantChat";
 import { readSavedPlanMarkdown } from "@/components/AtlasPlan";
 import { DEFAULT_PAPER_SKILL_ID, PAPER_SKILLS, getPaperSkill, type PaperChatContext } from "@/lib/paperSkills";
@@ -26,6 +26,10 @@ interface Message {
  * chips above the input. Each request carries the current Atlas Plan and the
  * papers collected on Setup, so every skill works from the researcher's own
  * material. The chosen skill is remembered per paper.
+ *
+ * #105: shown as a ChatGPT-style chat (AssistantChat's "chatgpt" variant)
+ * filling the left pane of the session; the skill picker lives inside the
+ * composer, so switching skills never moves the conversation.
  */
 export default function PaperChat({
   jobId,
@@ -78,37 +82,7 @@ export default function PaperChat({
     [jobId, selectedIdea?.title, topicQuery, collectedPapers],
   );
 
-  const toolbar = (
-    <div className="px-4 pt-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">Paper skills</span>
-      </div>
-      <div role="radiogroup" aria-label="Paper skill" className="flex flex-wrap gap-1.5">
-        {PAPER_SKILLS.map((s) => {
-          const active = s.id === skill.id;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => pick(s.id)}
-              title={s.description}
-              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                active
-                  ? "border-emerald-600 bg-emerald-50 text-emerald-800"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              }`}
-            >
-              <span aria-hidden>{s.icon}</span>
-              {s.label}
-            </button>
-          );
-        })}
-      </div>
-      <p className="mt-1.5 text-[11px] leading-snug text-gray-500">{skill.description}</p>
-    </div>
-  );
+  const composerAccessory = <SkillMenu skillId={skill.id} onPick={pick} />;
 
   return (
     <AssistantChat
@@ -117,15 +91,124 @@ export default function PaperChat({
       storageKey={`paper-chat:${jobId}`}
       skill={skill.id}
       getPaperContext={getPaperContext}
-      toolbar={toolbar}
+      variant="chatgpt"
+      title="Paper chat"
+      composerAccessory={composerAccessory}
       starters={skill.starters}
-      subtitle="Paper session · pick a skill below"
+      subtitle="One conversation for Setup, Plan and Experiments"
       welcome={{
         role: "assistant",
         content:
-          "Hi! I'm Atlas, your paper-writing partner. I can see this session's evidence, your converged ideas, the papers you collect on **Setup** and your **Atlas Plan**.\n\nPick a **paper skill** below — literature review, critical reviewer, abstract & title, section drafting (Markdown or LaTeX), experiment design, or general writing help — then ask away, or tap a suggestion.",
+          "Hi! I'm Atlas, your paper-writing partner. I can see this session's evidence, your converged ideas, the papers you collect on **Setup** and your **Atlas Plan**.\n\nChoose a **skill** from the menu in the message box — literature review, critical reviewer, abstract & title, section drafting (Markdown or LaTeX), experiment design, or general writing help — then ask away, or start from a suggestion.",
       }}
       onMessagesChange={onMessagesChange}
     />
+  );
+}
+
+/** #105: the paper-skill picker inside the composer — a compact button that opens a menu. */
+function SkillMenu({ skillId, onPick }: { skillId: string; onPick: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const skill = getPaperSkill(skillId);
+
+  const close = (refocus: boolean) => {
+    setOpen(false);
+    if (refocus) triggerRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    // Menu pattern: focus moves into the menu, onto the selected skill.
+    const active = PAPER_SKILLS.findIndex((s) => s.id === skillId);
+    itemRefs.current[Math.max(active, 0)]?.focus();
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open, skillId]);
+
+  const onMenuKeyDown = (e: React.KeyboardEvent) => {
+    const items = itemRefs.current.filter(Boolean) as HTMLButtonElement[];
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const go = (i: number) => items[(i + items.length) % items.length]?.focus();
+    if (e.key === "ArrowDown") { e.preventDefault(); go(at + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); go(at - 1); }
+    else if (e.key === "Home") { e.preventDefault(); go(0); }
+    else if (e.key === "End") { e.preventDefault(); go(items.length - 1); }
+    else if (e.key === "Escape") { e.preventDefault(); close(true); }
+    else if (e.key === "Tab") close(false);
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={skill.description}
+        className="flex max-w-full items-center gap-1.5 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+      >
+        <span aria-hidden>{skill.icon}</span>
+        <span className="truncate">{skill.label}</span>
+        <svg className={`h-3 w-3 flex-none text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 15 6-6 6 6" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          aria-label="Paper skills"
+          onKeyDown={onMenuKeyDown}
+          // Solid on purpose: a menu over the conversation must not inherit the Monet glass.
+          style={{ backgroundColor: "rgb(251 251 248)", backdropFilter: "none", WebkitBackdropFilter: "none" }}
+          className="absolute bottom-full left-0 z-30 mb-2 w-72 max-w-[calc(100vw-3rem)] rounded-2xl border border-gray-200 p-1.5 shadow-xl"
+        >
+          <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-400">Paper skills</p>
+          {PAPER_SKILLS.map((s, idx) => {
+            const active = s.id === skill.id;
+            return (
+              <button
+                key={s.id}
+                ref={(el) => {
+                  itemRefs.current[idx] = el;
+                }}
+                type="button"
+                tabIndex={-1}
+                role="menuitemradio"
+                aria-checked={active}
+                onClick={() => {
+                  onPick(s.id);
+                  close(true);
+                }}
+                className={`flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors ${active ? "bg-gray-100" : "hover:bg-gray-50"}`}
+              >
+                <span className="mt-0.5 text-base leading-none" aria-hidden>
+                  {s.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-900">
+                    {s.label}
+                    {active && <span className="text-[10px] font-medium text-emerald-700">· selected</span>}
+                  </span>
+                  <span className="block text-[11px] leading-snug text-gray-500">{s.description}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
