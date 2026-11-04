@@ -1,25 +1,33 @@
 <div align="center">
 
-<img src="docs/images/banner.jpg" alt="Hypothesis Atlas — Map the evidence. See the science." width="100%" />
+<img src="docs/images/hero.webp" alt="Hypothesis Atlas, an open-source research atlas" width="780" />
 
-<h3>An open-source research atlas: from a single topic to a grounded, peer-reviewed paper plan.</h3>
+<h3>Pick a topic. Map the evidence. Write with confidence.</h3>
+
+<p><em>An open-source research atlas that turns one topic into grounded evidence, a living knowledge graph<br />and a paper plan ready for a peer-review rehearsal, for researchers, analysts and students.</em></p>
 
 <p>
-  <a href="CHANGELOG.md"><img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-3f63b0?style=flat-square" /></a>
-  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-b45168?style=flat-square" /></a>
+  <a href="CHANGELOG.md"><img alt="Version 1.0 — official release" src="https://img.shields.io/badge/v1.0-official_release-3f63b0?style=for-the-badge" /></a>
+  <a href="LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-b45168?style=for-the-badge" /></a>
+  <a href="#-quick-start"><img alt="Self-hostable with Docker" src="https://img.shields.io/badge/self--host-one_command-4f8a6e?style=for-the-badge&logo=docker&logoColor=white" /></a>
+  <a href="#-configuration"><img alt="Bring your own key: 9 providers" src="https://img.shields.io/badge/BYO_key-9_providers-8a6fa8?style=for-the-badge" /></a>
+</p>
+
+<p>
   <img alt="Next.js 14" src="https://img.shields.io/badge/Next.js-14-101b38?style=flat-square&logo=nextdotjs" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-2f4d93?style=flat-square&logo=typescript&logoColor=white" />
   <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-15-4f8a6e?style=flat-square&logo=postgresql&logoColor=white" />
+  <img alt="Redis" src="https://img.shields.io/badge/Redis-7-b45168?style=flat-square&logo=redis&logoColor=white" />
   <img alt="Tested with Vitest" src="https://img.shields.io/badge/tested_with-Vitest-8a6fa8?style=flat-square&logo=vitest&logoColor=white" />
 </p>
 
 <p>
-  <a href="#-quick-start"><b>Quick start</b></a> ·
-  <a href="#-features"><b>Features</b></a> ·
-  <a href="#-configuration"><b>Configuration</b></a> ·
-  <a href="#-architecture"><b>Architecture</b></a> ·
-  <a href="CHANGELOG.md"><b>Changelog</b></a> ·
-  <a href="#-license--support"><b>License &amp; support</b></a>
+  <a href="#-quick-start">Quick start</a> ·
+  <a href="#-features">Features</a> ·
+  <a href="#-how-it-works">How it works</a> ·
+  <a href="#-configuration">Configuration</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="#-license--support">License &amp; support</a>
 </p>
 
 </div>
@@ -176,20 +184,9 @@ It's free, self-hostable, and **AGPL-3.0**. Bring your own model key (Claude, Op
 
 ## 🔬 How it works
 
-```mermaid
-flowchart LR
-    T([Topic or paper]) --> Q[Query expansion]
-    Q --> S{{"Sources<br/>OpenAlex · PubMed · GEO · social"}}
-    S --> R[Rank and dedupe]
-    R --> K[Knowledge tree<br/>methods · findings · gaps]
-    K --> V{Claim check<br/>overlap → NLI → LLM}
-    V -->|grounded or badged| G[(Research Graph)]
-    K --> P[Atlas Plan]
-    G --> P
-    P --> E[Experiments]
-    P --> PR[Peer-review rehearsal]
-    G --> A[Ask across all runs]
-```
+<p align="center">
+  <img src="docs/images/pipeline.webp" alt="How it works: pick a topic, gather evidence, build the knowledge tree, check every claim, grow the Research Graph, then plan and review" width="100%" />
+</p>
 
 Runs are processed by a background **worker** (BullMQ on Redis), so the web app stays responsive. Each step streams its progress to the browser and is recorded in the run's provenance log.
 
