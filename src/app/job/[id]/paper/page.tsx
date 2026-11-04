@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AtlasPlan from "@/components/AtlasPlan";
-import AssistantChat from "@/components/AssistantChat";
+import PaperChat from "@/components/PaperChat";
 import ExperimentsPanel from "@/components/ExperimentsPanel";
 import NotesPanel from "@/components/NotesPanel";
 import PaperMapPicker from "@/components/PaperMapPicker";
@@ -49,6 +49,12 @@ function PaperPipelineInner() {
   const stepRef = useRef(step);
   useEffect(() => { stepRef.current = step; }, [step]);
   const [experimentMessages, setExperimentMessages] = useState<{ role: string; content: string }[]>([]);
+  // #99: the paper chat's skill. Undefined = the chat's own remembered choice;
+  // entering Experiments switches it to the Experiment designer.
+  const [paperSkill, setPaperSkill] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (step === "experiments") setPaperSkill("experiment");
+  }, [step]);
   const [topicQuery, setTopicQuery] = useState("");
   const [ideas, setIdeas] = useState<ResearchIdea[]>([]);
   const [ideasSource, setIdeasSource] = useState<"loading" | "converged" | "tree" | "topic">("loading");
@@ -314,12 +320,17 @@ function PaperPipelineInner() {
   };
 
   const idea = ideas[selectedIdeaIndex];
+  const collectedPapers = paperResults.map((p) => ({
+    title: p.title,
+    venue: p.venue || null,
+    year: Number.parseInt(p.year, 10) || null,
+  }));
 
   return (
     <div className="min-h-screen ink-paper">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-3">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
+        <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <Link
               href={`/job/${jobId}`}
@@ -366,7 +377,26 @@ function PaperPipelineInner() {
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      {/* #99: two panes — the paper chat (with paper skills) on the left, the
+          paper session (Setup → Plan → Experiments) on the right. Stacks on
+          narrow screens, chat first. */}
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6 flex flex-col lg:flex-row gap-6 items-start">
+        <aside className="w-full lg:w-[40%] xl:w-[38%] flex-shrink-0 lg:sticky lg:top-6 h-[75vh] lg:h-[calc(100vh-7rem)] min-h-[520px] bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+          <PaperChat
+            jobId={jobId}
+            topicQuery={topicQuery}
+            selectedIdea={idea ?? undefined}
+            collectedPapers={collectedPapers}
+            skill={paperSkill}
+            onSkillChange={setPaperSkill}
+            onMessagesChange={(msgs) =>
+              // Verify plan re-checks the experiment designer's numbers, not every skill's prose.
+              setExperimentMessages(msgs.filter((m) => m.role === "user" || !m.skill || m.skill === "experiment"))
+            }
+          />
+        </aside>
+
+        <div className="flex-1 min-w-0 w-full">
         {/* Step tabs + Quiz button */}
         <div className="flex items-center justify-between mb-8">
           <nav className="flex items-center gap-2" aria-label="Paper pipeline steps">
@@ -706,9 +736,9 @@ function PaperPipelineInner() {
 
         {/* ─── Step 2: Atlas Plan + Atlas Assistant ─── */}
         {step === "plan" && (
-          <div className="flex flex-col xl:flex-row gap-6 h-[calc(100vh-220px)] min-h-[520px]">
+          <div className="flex flex-col 2xl:flex-row gap-6 2xl:h-[calc(100vh-220px)] min-h-[520px]">
             {/* Atlas Plan */}
-            <div className="flex-1 min-w-0 min-h-[420px] xl:min-h-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 min-w-0 min-h-[420px] 2xl:min-h-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
               <AtlasPlan
                 key={selectedIdeaIndex}
                 jobId={jobId}
@@ -719,19 +749,14 @@ function PaperPipelineInner() {
               />
             </div>
 
-            {/* Atlas Assistant chat (Groq, note-taking) */}
-            <div className="flex-1 min-w-0 min-h-[420px] xl:min-h-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-              <AssistantChat jobId={jobId} selectedIdea={idea ?? undefined} />
-            </div>
-
             {/* Right sidebar: context export */}
-            <div className="w-full xl:w-72 flex-shrink-0 space-y-4">
+            <div className="w-full 2xl:w-72 flex-shrink-0 space-y-4">
               <div className="rounded-2xl p-5" style={{ background: "linear-gradient(135deg, #5f4e56, #384a54)", color: "#fbf8f1" }}>
                 <h3 className="font-bold mb-1 text-sm">Two agents, one paper</h3>
                 <p className="text-xs leading-relaxed" style={{ color: "#d6c9cf" }}>
-                  <strong>Atlas Plan</strong> (left) drafts a contribution statement, claims, and an
-                  outline from your evidence. <strong>Atlas Assistant</strong> (middle) is grounded in
-                  your session evidence, answers questions, and saves key replies to your notes.
+                  <strong>Atlas Plan</strong> (here) drafts a contribution statement, claims, and an
+                  outline from your evidence. The <strong>paper chat</strong> (left) reads this plan:
+                  pick a skill there to review it, draft sections, or write the abstract.
                 </p>
               </div>
 
@@ -886,38 +911,21 @@ function PaperPipelineInner() {
           </div>
         )}
 
-        {/* ─── Step 3: Experiments — plan chat + claims verification ─── */}
+        {/* ─── Step 3: Experiments — claims verification (the plan is designed in the paper chat) ─── */}
         {step === "experiments" && (
-          <div className="flex flex-col xl:flex-row gap-6 h-[calc(100vh-220px)] min-h-[520px]">
-            <div className="flex-1 min-w-0 min-h-[420px] xl:min-h-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-              <AssistantChat
-                key={selectedIdeaIndex}
-                jobId={jobId}
-                selectedIdea={idea ?? undefined}
-                persona="experiment"
-                storageKey={`experiment-chat:${jobId}`}
-                welcome={{
-                  role: "assistant",
-                  content:
-                    "I'm your experiment designer. Tell me which idea we're testing (or use the selected one above), and I'll turn it into a concrete plan: hypothesis, variables, baselines from the mapped papers, metrics with equations, and expected results with numbers you can verify.\n\nMath renders in LaTeX — try asking for a metric like $F_1 = 2\\frac{pr}{p+r}$.",
-                }}
-                onMessagesChange={(msgs) => setExperimentMessages(msgs)}
-              />
+          <div className="space-y-4 max-w-3xl">
+            <div className="rounded-2xl p-5" style={{ background: "linear-gradient(135deg, #5f4e56, #455c68)", color: "#fbf8f1" }}>
+              <h3 className="font-bold mb-1 text-sm">Experiments, verified</h3>
+              <p className="text-xs leading-relaxed" style={{ color: "#d6c9cf" }}>
+                Design the experiment with the <strong>Experiment designer</strong> skill in the paper
+                chat (left), then run <strong>Verify plan</strong> to re-evaluate every quantitative
+                claim — sample sizes, expected gains, metric math — with mathjs.
+              </p>
             </div>
-
-            <div className="w-full xl:w-80 flex-shrink-0 space-y-4">
-              <div className="rounded-2xl p-5" style={{ background: "linear-gradient(135deg, #5f4e56, #455c68)", color: "#fbf8f1" }}>
-                <h3 className="font-bold mb-1 text-sm">Experiments, verified</h3>
-                <p className="text-xs leading-relaxed" style={{ color: "#d6c9cf" }}>
-                  Plan the experiment with the assistant, then run{" "}
-                  <strong>Verify plan</strong> to re-evaluate every quantitative claim in the
-                  plan — sample sizes, expected gains, metric math — with mathjs.
-                </p>
-              </div>
-              <ExperimentsPanel jobId={jobId} messages={experimentMessages} />
-            </div>
+            <ExperimentsPanel jobId={jobId} messages={experimentMessages} />
           </div>
         )}
+        </div>
       </div>
 
       <NotesPanel jobId={jobId} topic={topicQuery} />

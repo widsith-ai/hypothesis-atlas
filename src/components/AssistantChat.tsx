@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { appendNote } from "@/lib/notes";
 import ChatMarkdown, { hasWideContent } from "./ChatMarkdown";
 import { LLM_CONFIG_CHANGED_EVENT, openModelKeyDialog } from "@/lib/llmClientConfig";
+import { getPaperSkill, type PaperChatContext } from "@/lib/paperSkills";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+  /** #99: the paper skill that wrote this reply (assistant messages only). */
+  skill?: string;
 }
 
 interface ResearchIdea {
@@ -31,6 +34,16 @@ interface AssistantChatProps {
   enableNotes?: boolean;
   /** Called with the selected text when the user highlights something in a message and clicks the "Save" popover that appears. Omit to disable highlighting entirely (no popover is shown). */
   onHighlight?: (text: string) => void;
+  /** #99: paper skill id sent with each request (src/lib/paperSkills.ts). Replies are labelled with it. */
+  skill?: string;
+  /** #99: read at send time — the page's current Atlas Plan and collected papers, for the skill to work from. */
+  getPaperContext?: () => PaperChatContext | undefined;
+  /** #99: rendered between the messages and the input (the skill picker). */
+  toolbar?: React.ReactNode;
+  /** #99: one-click prompts shown above the input while it's empty. */
+  starters?: string[];
+  /** Header subtitle when no idea is selected. */
+  subtitle?: string;
 }
 
 const WELCOME: Message = {
@@ -76,6 +89,11 @@ export default function AssistantChat({
   endpoint,
   enableNotes = true,
   onHighlight,
+  skill,
+  getPaperContext,
+  toolbar,
+  starters,
+  subtitle,
 }: AssistantChatProps) {
   const effectiveWelcome = welcome ?? WELCOME;
   const cacheKey = storageKey ?? makeCacheKey(jobId);
@@ -161,6 +179,8 @@ export default function AssistantChat({
             .map((m) => ({ role: m.role, content: m.content })),
           persona,
           selectedIdea,
+          ...(skill ? { skill } : {}),
+          ...(getPaperContext ? { paperContext: getPaperContext() } : {}),
         }),
       });
 
@@ -190,7 +210,7 @@ export default function AssistantChat({
       let accumulated = "";
       let assistantIndex = newMessages.length;
 
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "", skill }]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -200,7 +220,7 @@ export default function AssistantChat({
         setMessages((prev) => {
           const updated = [...prev];
           if (updated[assistantIndex]) {
-            updated[assistantIndex] = { role: "assistant", content: final };
+            updated[assistantIndex] = { role: "assistant", content: final, skill };
           }
           return updated;
         });
@@ -225,7 +245,7 @@ export default function AssistantChat({
         setMessages((prev) => {
           const updated = [...prev];
           if (updated[assistantIndex]) {
-            updated[assistantIndex] = { role: "assistant", content: text };
+            updated[assistantIndex] = { role: "assistant", content: text, skill };
           }
           return updated;
         });
@@ -285,7 +305,7 @@ export default function AssistantChat({
               {selectedIdea.title}
             </span>
           ) : (
-            <span className="text-xs text-gray-400">Writing assistant · Groq</span>
+            <span className="text-xs text-gray-400">{subtitle ?? "Writing assistant · Groq"}</span>
           )}
         </div>
         <button
@@ -339,6 +359,11 @@ export default function AssistantChat({
                 </div>
               )}
               <div className={wide ? "max-w-full flex-1 min-w-0" : "max-w-[80%]"}>
+                {msg.role === "assistant" && msg.skill && (
+                  <div className="mb-1 text-[11px] font-medium text-gray-500">
+                    {getPaperSkill(msg.skill).icon} {getPaperSkill(msg.skill).label}
+                  </div>
+                )}
                 <div
                   className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     msg.role === "user"
@@ -376,8 +401,24 @@ export default function AssistantChat({
         <div ref={bottomRef} />
       </div>
 
+      {toolbar && <div className="flex-shrink-0 border-t border-gray-200 bg-white">{toolbar}</div>}
+
       {/* Input */}
-      <form onSubmit={handleSubmit} className="flex-shrink-0 border-t border-gray-200 p-4 bg-white">
+      <form onSubmit={handleSubmit} className={`flex-shrink-0 p-4 bg-white ${toolbar ? "" : "border-t border-gray-200"}`}>
+        {starters && starters.length > 0 && !input.trim() && !streaming && !noKey && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {starters.map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => (st.endsWith(": ") ? setInput(st) : sendMessage(st))}
+                className="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1 hover:bg-gray-100 hover:text-gray-900 transition-colors text-left"
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2 items-end">
           <textarea
             value={input}

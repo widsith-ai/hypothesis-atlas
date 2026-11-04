@@ -60,6 +60,17 @@ function loadCached(key: string): CachedPlan | null {
   }
 }
 
+/** #99: the plan saved for this job + idea, as the Markdown export — for the Write Paper chat's skills to work from. */
+export function readSavedPlanMarkdown(jobId: string, ideaTitle: string | undefined, topicQuery: string): string | undefined {
+  const cached = loadCached(makeCacheKey(jobId, ideaTitle));
+  if (!cached) return undefined;
+  try {
+    return buildPlanExportMarkdown(topicQuery, cached.plan);
+  } catch {
+    return undefined;
+  }
+}
+
 const BADGE_STYLE: Record<GroundedPlanClaim["grounding"]["status"], string> = {
   grounded: "bg-green-50 text-green-700 border-green-200",
   unsupported: "bg-amber-50 text-amber-700 border-amber-200",
