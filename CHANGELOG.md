@@ -15,7 +15,7 @@ All notable changes to Hypothesis Atlas. Issue and PR numbers refer to [widsith-
 - **License & support**: free open source, with a collaboration / enterprise contact (#95)
 - **Password reset**: emailed one-time links and `/reset-password` (#96)
 - **Explorer first**: `/` opens straight on the word cloud; the style and scene picker lives in Explorer's top bar; Explorer asks for a model key once when one is needed (#97)
-- **Official README**, with screenshots and a complete configuration reference; this changelog split out of it (#100)
+- **Official README**, with a Monet hero card, screenshots, a painted pipeline and a complete configuration reference; this changelog split out of it (#100, #101)
 - `package.json` version set to `1.0.0`
 
 ## Development milestones (before 1.0)
