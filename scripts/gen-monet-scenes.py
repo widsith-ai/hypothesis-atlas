@@ -1,6 +1,6 @@
 """
 Paints the Monet-style (Impressionist) page backdrops used by the default
-"monet" art style — see src/app/monet.css and issue #87.
+"monet" art style — see src/app/paint.css and issue #87.
 
 One scene per colour mode (the existing `theme` key):
 

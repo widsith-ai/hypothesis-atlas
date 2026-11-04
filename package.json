@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
+  "homepage": "https://github.com/widsith-ai/hypothesis-atlas#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/widsith-ai/hypothesis-atlas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/widsith-ai/hypothesis-atlas/issues"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
