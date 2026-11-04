@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LLM_PROVIDERS, getProviderInfo, maskKey, type LLMProviderId } from "@/lib/llmProviders";
 import {
   LLM_CONFIG_CHANGED_EVENT,
@@ -9,7 +10,9 @@ import {
   clearLLMConfig,
   getActiveLLMConfig,
   installLLMFetch,
+  markDefaultModelChosen,
   saveLLMConfig,
+  type OpenModelKeyOptions,
   type StoredLLMConfig,
 } from "@/lib/llmClientConfig";
 
@@ -236,25 +239,57 @@ export default function ModelKeySettings({ onDone }: { onDone?: () => void }) {
 
 /** Global host: installs the fetch bridge and opens the dialog on `atlas:open-model-key`. */
 export function ModelKeyDialogHost() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [continueTo, setContinueTo] = useState<string | null>(null);
+  const [serverHasModel, setServerHasModel] = useState(false);
 
   useEffect(() => {
     installLLMFetch();
-    const show = () => setOpen(true);
+    const show = (e: Event) => {
+      const detail = (e as CustomEvent<OpenModelKeyOptions | undefined>).detail;
+      setContinueTo(detail?.continueTo ?? null);
+      setOpen(true);
+    };
     window.addEventListener(OPEN_MODEL_KEY_EVENT, show);
     return () => window.removeEventListener(OPEN_MODEL_KEY_EVENT, show);
   }, []);
 
+  // Only needed for the "continue with the default model" option.
+  useEffect(() => {
+    if (!open || !continueTo) return;
+    fetch("/api/llm")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: ServerInfo | null) => setServerHasModel(Boolean(data?.serverModel)))
+      .catch(() => setServerHasModel(false));
+  }, [open, continueTo]);
+
+  const close = () => {
+    setOpen(false);
+    setContinueTo(null);
+  };
+
+  const proceed = () => {
+    const target = continueTo;
+    close();
+    if (target) router.push(target);
+  };
+
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setContinueTo(null);
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onMouseDown={() => setOpen(false)}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onMouseDown={close}>
       <div
         role="dialog"
         aria-modal="true"
@@ -264,13 +299,30 @@ export function ModelKeyDialogHost() {
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id="model-key-title" className="text-lg font-bold text-gray-900">
-            Model &amp; API key
+            {continueTo ? "Choose a model to explore with" : "Model & API key"}
           </h2>
-          <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none" aria-label="Close">
+          <button onClick={close} className="text-gray-400 hover:text-gray-700 text-xl leading-none" aria-label="Close">
             ×
           </button>
         </div>
-        <ModelKeySettings onDone={() => setTimeout(() => setOpen(false), 600)} />
+        {continueTo && (
+          <p className="text-xs text-gray-500 mb-4">
+            Add your own API key to run Explorer on your provider account{serverHasModel ? ", or continue with Atlas's default model" : ""}.
+          </p>
+        )}
+        <ModelKeySettings onDone={continueTo ? proceed : () => setTimeout(close, 600)} />
+        {continueTo && serverHasModel && (
+          <button
+            type="button"
+            onClick={() => {
+              markDefaultModelChosen();
+              proceed();
+            }}
+            className="mt-4 w-full text-center text-xs text-gray-500 hover:text-gray-800 underline"
+          >
+            Continue with Atlas&apos;s default model
+          </button>
+        )}
       </div>
     </div>
   );

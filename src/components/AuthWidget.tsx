@@ -127,7 +127,7 @@ export default function AuthWidget() {
           <div className="flex items-center gap-1.5">
             {/* #88: anonymous / self-hosted users can bring a key without an account. */}
             <button
-              onClick={openModelKeyDialog}
+              onClick={() => openModelKeyDialog()}
               title={describeLLMConfig(llmConfig)}
               className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-full px-3 py-1.5 shadow-sm text-xs font-medium text-gray-600 hover:bg-white transition-colors flex items-center gap-1.5"
             >

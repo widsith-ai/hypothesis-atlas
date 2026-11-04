@@ -92,8 +92,36 @@ export function getActiveLLMConfig(): StoredLLMConfig | null {
   return activeConfig();
 }
 
-export function openModelKeyDialog() {
-  window.dispatchEvent(new Event(OPEN_MODEL_KEY_EVENT));
+export interface OpenModelKeyOptions {
+  /**
+   * Where to go once the user has a model: after saving a key, or after
+   * choosing to continue on the server's default model. Used by the landing
+   * page's Explorer entry points, which route through this dialog first.
+   */
+  continueTo?: string;
+}
+
+export function openModelKeyDialog(opts: OpenModelKeyOptions = {}) {
+  window.dispatchEvent(new CustomEvent<OpenModelKeyOptions>(OPEN_MODEL_KEY_EVENT, { detail: opts }));
+}
+
+const DEFAULT_MODEL_CHOSEN_KEY = "atlas:llm-default-chosen";
+
+/** The user picked "continue with the default model" this tab — don't ask again until it closes. */
+export function markDefaultModelChosen() {
+  try {
+    window.sessionStorage.setItem(DEFAULT_MODEL_CHOSEN_KEY, "1");
+  } catch {
+    /* storage blocked: they'll simply be asked again next time */
+  }
+}
+
+export function hasChosenDefaultModel(): boolean {
+  try {
+    return window.sessionStorage.getItem(DEFAULT_MODEL_CHOSEN_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 function requestUrl(input: RequestInfo | URL): string {

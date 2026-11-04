@@ -311,6 +311,7 @@ export default function ExplorePage() {
   };
 
   const handleWordClick = async (word: string) => {
+    setTopicError("");
     if (exploreMode) {
       setExploreTopic(word);
       return;
@@ -322,16 +323,18 @@ export default function ExplorePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topicQuery: word }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (data.jobId) {
         localStorage.setItem("lastJobId", data.jobId);
         router.push(`/job/${data.jobId}`);
       } else {
         setIsLoading(false);
+        setTopicError(data.error ?? "Couldn't start the run — please try again.");
       }
     } catch (error) {
       console.error("Error creating job:", error);
       setIsLoading(false);
+      setTopicError("Couldn't reach the server — please try again.");
     }
   };
 

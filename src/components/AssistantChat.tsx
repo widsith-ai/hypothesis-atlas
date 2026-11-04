@@ -305,7 +305,7 @@ export default function AssistantChat({
       {noKey && (
         <div className="mx-4 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
           <strong>No model key.</strong>{" "}
-          <button onClick={openModelKeyDialog} className="underline font-semibold hover:text-amber-900">
+          <button onClick={() => openModelKeyDialog()} className="underline font-semibold hover:text-amber-900">
             Add your own API key
           </button>{" "}
           (Claude, OpenAI, Gemini, Groq…), or set{" "}
