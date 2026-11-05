@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { streamGroqChat, ChatMessage } from '@/lib/groq'
 import { hasLLM, LLM_NOT_CONFIGURED_MESSAGE } from '@/lib/llm'
+import { buildPaperContext, skillForRequest } from '@/lib/paperSkills'
 
 export async function POST(
   request: NextRequest,
@@ -14,7 +15,7 @@ export async function POST(
     )
   }
 
-  const { messages, persona } = await request.json()
+  const { messages, persona, skill: skillId, paperContext } = await request.json()
   const chatMessages: ChatMessage[] = Array.isArray(messages) ? messages : []
 
   const job = await prisma.job.findUnique({ where: { id: params.id } })
@@ -43,7 +44,9 @@ export async function POST(
     .join('\n')
 
   const isQuestionBot = persona === 'ask'
-  const isExperiment = persona === 'experiment'
+  // #99: the Write Paper chat picks a paper skill; older callers send a persona.
+  const skill = skillForRequest(persona, skillId)
+  const pageContext = buildPaperContext(paperContext)
 
   const systemPrompt = `You are Atlas, the embedded AI assistant inside Hypothesis Atlas, an evidence-mapping research platform.
 
@@ -65,24 +68,12 @@ ${ideas
 
 **Key literature discovered (peer-reviewed):**
 ${litContext || 'None available yet.'}
-
+${pageContext ? `\n${pageContext}\n` : ''}
 ## Your Role
 ${
   isQuestionBot
     ? `You are the user's question bot for this research session. Answer their questions about the topic, the evidence, the knowledge tree, and the papers above. Ground every answer in the session context — cite specific papers or findings by name. If the answer is not in the context, say so honestly instead of inventing facts. Keep answers concise (under 200 words unless a longer explanation is truly needed).`
-    : isExperiment
-    ? `You are the experiment designer for this research session. Help the researcher turn their selected idea into a concrete, runnable experiment plan. Ground every suggestion in the session context — cite specific papers, datasets, and methods discovered above by name.
-
-Structure your plans around:
-1. **Hypothesis** — the precise falsifiable claim being tested.
-2. **Variables** — independent, dependent, and controlled, with concrete values.
-3. **Method** — datasets/benchmarks from the session evidence and the exact procedure.
-4. **Baselines** — comparison methods from the mapped literature, with the numbers they report.
-5. **Metrics** — what you measure and the math behind each metric (write the equations in LaTeX: $...$ inline or $$...$$ display).
-6. **Expected results** — concrete quantitative predictions. ALWAYS state the key expected results as plain arithmetic expressions that can be checked (e.g. "expected accuracy gain: 0.843 - 0.812 = 0.031"), and include the equations in LaTeX form as well. When you give an expected value, write the expression that produces it so the verification step can evaluate it.
-
-Be concrete and quantitative. Prefer real numbers (from the papers above, or clearly-labeled assumptions) over vague claims.`
-    : `You are the writing assistant working alongside the Atlas Plan tool. Help the researcher finish their paper: clarify concepts, suggest phrasings, structure arguments, explain methods from the literature, and challenge weak reasoning. Ground your help in the session context — cite specific papers or findings by name. Be concise and practical.`
+    : `**Skill: ${skill!.label}.** ${skill!.instructions}`
 }
 
 ## Note-Taking Skill

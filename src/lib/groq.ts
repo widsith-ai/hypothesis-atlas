@@ -80,7 +80,14 @@ export async function streamGroqChat(
   const client = llm.client
   const encoder = new TextEncoder()
 
+  // #105: set when the client goes away (e.g. it pressed Stop), so we stop
+  // pulling tokens from the model instead of generating to nobody.
+  let cancelled = false
+
   return new ReadableStream({
+    cancel() {
+      cancelled = true
+    },
     async start(controller) {
       try {
         const completion = await client.chat.completions.create({
@@ -95,14 +102,19 @@ export async function streamGroqChat(
         })
 
         for await (const chunk of completion) {
+          if (cancelled) break
           const delta = chunk.choices[0]?.delta?.content
-          if (delta) controller.enqueue(encoder.encode(delta))
+          if (delta && !cancelled) controller.enqueue(encoder.encode(delta))
         }
       } catch (err) {
         const msg = redactSecrets(err instanceof Error ? err.message : 'Stream error')
-        controller.enqueue(encoder.encode(`\n\n[Error: ${msg}]`))
+        if (!cancelled) controller.enqueue(encoder.encode(`\n\n[Error: ${msg}]`))
       } finally {
-        controller.close()
+        try {
+          controller.close()
+        } catch {
+          /* already cancelled by the client */
+        }
       }
     },
   })
