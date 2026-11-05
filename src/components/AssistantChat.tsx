@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { appendNote } from "@/lib/notes";
 import ChatMarkdown, { hasWideContent } from "./ChatMarkdown";
 import { LLM_CONFIG_CHANGED_EVENT, openModelKeyDialog } from "@/lib/llmClientConfig";
+import { getPaperSkill, type PaperChatContext } from "@/lib/paperSkills";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+  /** #99: the paper skill that wrote this reply (assistant messages only). */
+  skill?: string;
 }
 
 interface ResearchIdea {
@@ -31,6 +34,28 @@ interface AssistantChatProps {
   enableNotes?: boolean;
   /** Called with the selected text when the user highlights something in a message and clicks the "Save" popover that appears. Omit to disable highlighting entirely (no popover is shown). */
   onHighlight?: (text: string) => void;
+  /** #99: paper skill id sent with each request (src/lib/paperSkills.ts). Replies are labelled with it. */
+  skill?: string;
+  /** #99: read at send time — the page's current Atlas Plan and collected papers, for the skill to work from. */
+  getPaperContext?: () => PaperChatContext | undefined;
+  /** #99: rendered between the messages and the input (the skill picker). */
+  toolbar?: React.ReactNode;
+  /** #99: one-click prompts shown above the input while it's empty. */
+  starters?: string[];
+  /** Header subtitle when no idea is selected. */
+  subtitle?: string;
+  /**
+   * #105: "chatgpt" renders a full-height, ChatGPT-style chat — replies as
+   * full-width text, the user's messages as right-aligned bubbles, a pinned
+   * auto-growing composer with a stop button, and suggestion cards on an empty
+   * conversation. Used by the Write Paper session; everything else keeps the
+   * default look.
+   */
+  variant?: "default" | "chatgpt";
+  /** #105 (chatgpt variant): rendered inside the composer, left of the send button (the skill picker). */
+  composerAccessory?: React.ReactNode;
+  /** #105 (chatgpt variant): header title. */
+  title?: string;
 }
 
 const WELCOME: Message = {
@@ -76,7 +101,16 @@ export default function AssistantChat({
   endpoint,
   enableNotes = true,
   onHighlight,
+  skill,
+  getPaperContext,
+  toolbar,
+  starters,
+  subtitle,
+  variant = "default",
+  composerAccessory,
+  title,
 }: AssistantChatProps) {
+  const chatgpt = variant === "chatgpt";
   const effectiveWelcome = welcome ?? WELCOME;
   const cacheKey = storageKey ?? makeCacheKey(jobId);
   const [messages, setMessages] = useState<Message[]>([effectiveWelcome]);
@@ -90,9 +124,15 @@ export default function AssistantChat({
     return () => window.removeEventListener(LLM_CONFIG_CHANGED_EVENT, unlock);
   }, []);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [highlightPopup, setHighlightPopup] = useState<{ text: string; x: number; y: number } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // #105: lets the composer's stop button cancel a streaming reply.
+  const abortRef = useRef<AbortController | null>(null);
+  // #105: only auto-scroll while the reader is already at (or near) the bottom.
+  const stickToBottom = useRef(true);
 
   // Dismiss the highlight popup if the page scrolls out from under it —
   // it's positioned fixed to the selection's viewport rect, not the
@@ -127,19 +167,45 @@ export default function AssistantChat({
     setHighlightPopup(null);
   };
 
+  // Saving waits until *this key's* conversation has been restored. Otherwise
+  // the first render's save (just the welcome message) overwrites it before it
+  // loads — React's double-run effects in development then restore that
+  // overwritten copy — and when the key changes (another paper), the previous
+  // conversation would be written under the new key.
+  const [restoredKey, setRestoredKey] = useState<string | null>(null);
+
   useEffect(() => {
     const cached = loadSession(cacheKey);
-    if (cached && cached.length > 0) setMessages(cached);
+    // A session holding only a greeting may carry an older welcome text, so
+    // show the current welcome instead.
+    const hasConversation = !!cached && cached.length > 0 && !(cached.length === 1 && cached[0].role === "assistant");
+    setMessages(hasConversation ? cached! : [effectiveWelcome]);
+    setRestoredKey(cacheKey);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cacheKey]);
 
   useEffect(() => {
-    if (!streaming) saveSession(cacheKey, messages);
-  }, [streaming, messages, cacheKey]);
+    if (restoredKey === cacheKey && !streaming) saveSession(cacheKey, messages);
+  }, [restoredKey, streaming, messages, cacheKey]);
 
   useEffect(() => {
+    if (chatgpt) {
+      // Scroll the thread itself — scrollIntoView would also scroll the page
+      // and the session pane beside it.
+      const el = messagesRef.current;
+      if (el && stickToBottom.current) el.scrollTop = el.scrollHeight;
+      return;
+    }
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, chatgpt]);
+
+  // #105: the composer grows with its content, up to a cap, then scrolls.
+  useEffect(() => {
+    if (!chatgpt || !textareaRef.current) return;
+    const el = textareaRef.current;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [input, chatgpt]);
 
   useEffect(() => {
     onMessagesChange?.(messages);
@@ -150,17 +216,51 @@ export default function AssistantChat({
     setMessages(newMessages);
     setInput("");
     setStreaming(true);
+    stickToBottom.current = true;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const assistantIndex = newMessages.length;
+    let accumulated = "";
+    let placeholder = false;
+
+    // Auto-note: if the model ended with a 📝 line, strip it from the displayed
+    // text regardless of enableNotes (it's never meant to be shown verbatim) and
+    // save it to notes only when that's available — and only from a finished reply.
+    const finishReply = async (complete: boolean) => {
+      const { text, note } = extractAutoNote(accumulated);
+      if (!note) return;
+      if (complete && enableNotes) {
+        try {
+          await appendNote(jobId, {
+            type: "insight",
+            title: `From Assistant — ${userText.slice(0, 60)}`,
+            content: note,
+          });
+        } catch (err) {
+          console.error("Failed to save auto-note:", err);
+        }
+      }
+      setMessages((prev) => {
+        const updated = [...prev];
+        if (updated[assistantIndex]) updated[assistantIndex] = { role: "assistant", content: text, skill };
+        return updated;
+      });
+    };
 
     try {
       const res = await fetch(endpoint ?? `/api/jobs/${jobId}/assistant-chat`, {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          // Never send the greeting (whatever its text) or empty turns as history.
           messages: newMessages
-            .filter((m) => m.content !== effectiveWelcome.content)
+            .filter((m, idx) => !(idx === 0 && m.role === "assistant") && m.content !== effectiveWelcome.content && m.content.trim() !== "")
             .map((m) => ({ role: m.role, content: m.content })),
           persona,
           selectedIdea,
+          ...(skill ? { skill } : {}),
+          ...(getPaperContext ? { paperContext: getPaperContext() } : {}),
         }),
       });
 
@@ -187,10 +287,9 @@ export default function AssistantChat({
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let accumulated = "";
-      let assistantIndex = newMessages.length;
 
-      setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "", skill }]);
+      placeholder = true;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -200,46 +299,39 @@ export default function AssistantChat({
         setMessages((prev) => {
           const updated = [...prev];
           if (updated[assistantIndex]) {
-            updated[assistantIndex] = { role: "assistant", content: final };
+            updated[assistantIndex] = { role: "assistant", content: final, skill };
           }
           return updated;
         });
       }
 
-      // Auto-note: if the model ended with a 📝 line, strip it from the
-      // displayed text regardless of enableNotes (it's never meant to be
-      // shown verbatim) and save it to notes only when that's available.
-      const { text, note } = extractAutoNote(accumulated);
-      if (note) {
-        if (enableNotes) {
-          try {
-            await appendNote(jobId, {
-              type: "insight",
-              title: `From Assistant — ${userText.slice(0, 60)}`,
-              content: note,
-            });
-          } catch (err) {
-            console.error("Failed to save auto-note:", err);
-          }
-        }
-        setMessages((prev) => {
-          const updated = [...prev];
-          if (updated[assistantIndex]) {
-            updated[assistantIndex] = { role: "assistant", content: text };
-          }
-          return updated;
-        });
-      }
+      await finishReply(true);
     } catch (err) {
+      // Stopped by the user: keep whatever had streamed in (minus a half-written
+      // 📝 note), no error bubble — and no empty reply left in the history.
+      if ((err as { name?: string })?.name === "AbortError") {
+        if (placeholder && !accumulated.trim()) {
+          setMessages((prev) => prev.filter((_, idx) => idx !== assistantIndex));
+        } else {
+          await finishReply(false);
+        }
+        return;
+      }
       console.error(err);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Error connecting to the assistant. Please try again." },
       ]);
     } finally {
+      abortRef.current = null;
       setStreaming(false);
     }
   };
+
+  const stopStreaming = () => abortRef.current?.abort();
+
+  // Cancel an in-flight reply if the chat unmounts (e.g. leaving the page).
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const handleSaveNote = (index: number) => {
     const msg = messages[index];
@@ -260,6 +352,9 @@ export default function AssistantChat({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Don't send while an IME is composing (Chinese / Japanese / Korean input).
+    // Safari reports the confirming Enter with isComposing=false but keyCode 229.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e as unknown as React.FormEvent);
@@ -267,11 +362,190 @@ export default function AssistantChat({
   };
 
   const handleReset = () => {
+    abortRef.current?.abort();
     try { localStorage.removeItem(cacheKey); } catch {}
     setMessages([effectiveWelcome]);
     setSavedIds(new Set());
     setNoKey(false);
   };
+
+  // #105: ChatGPT-style layout (Write Paper session).
+  if (chatgpt) {
+    const isEmpty = messages.length <= 1 && messages[0]?.content === effectiveWelcome.content;
+    const onThreadScroll = () => {
+      const el = messagesRef.current;
+      if (el) stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    };
+    const confirmNewChat = () => {
+      if (messages.length > 1 && !window.confirm("Start a new chat? This paper's current conversation will be cleared.")) return;
+      handleReset();
+      textareaRef.current?.focus();
+    };
+    const copy = (text: string, i: number) => {
+      navigator.clipboard?.writeText(text).then(
+        () => {
+          setCopiedIndex(i);
+          window.setTimeout(() => setCopiedIndex((c) => (c === i ? null : c)), 1500);
+        },
+        () => {},
+      );
+    };
+
+    return (
+      <div className="flex h-full min-h-0 flex-col bg-white">
+        {/* Header */}
+        <div className="flex flex-none items-center justify-between gap-3 border-b border-gray-200 px-4 py-2.5">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-gray-900">{title ?? "Atlas Assistant"}</p>
+            <p className="truncate text-[11px] text-gray-500">{selectedIdea ? selectedIdea.title : subtitle ?? "Writing assistant"}</p>
+          </div>
+          <button
+            type="button"
+            onClick={confirmNewChat}
+            className="flex flex-none items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+            title="Start a new conversation for this paper"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16.862 4.487a2.1 2.1 0 1 1 2.97 2.97L7.5 19.79 3 21l1.21-4.5L16.862 4.487Z" />
+            </svg>
+            New chat
+          </button>
+        </div>
+
+        {noKey && <NoKeyBanner className="mx-4 mt-3 flex-none" />}
+
+        {highlightPopup && <HighlightPopup x={highlightPopup.x} y={highlightPopup.y} onSave={handleSaveHighlight} />}
+
+        {/* Thread */}
+        <div
+          ref={messagesRef}
+          onScroll={onThreadScroll}
+          onMouseUp={handleSelectionChange}
+          className="min-h-0 flex-1 overflow-y-auto"
+          aria-live="polite"
+        >
+          <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
+            {messages.map((msg, i) => {
+              const last = i === messages.length - 1;
+              if (msg.role === "user") {
+                return (
+                  <div key={i} className="flex justify-end">
+                    <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-3xl bg-gray-200 px-4 py-2.5 text-sm leading-relaxed text-gray-900">
+                      {msg.content}
+                    </div>
+                  </div>
+                );
+              }
+              const skillInfo = msg.skill ? getPaperSkill(msg.skill) : null;
+              return (
+                <div key={i} className="group flex gap-3">
+                  <div className="mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-rose-400 text-[11px] font-bold text-white" aria-hidden>
+                    A
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {skillInfo && (
+                      <p className="mb-1 text-[11px] font-medium text-gray-500">
+                        {skillInfo.icon} {skillInfo.label}
+                      </p>
+                    )}
+                    <div className="text-sm leading-relaxed text-gray-800">
+                      {msg.content ? (
+                        <ChatMarkdown text={msg.content} />
+                      ) : (
+                        streaming && last && (
+                          <span className="inline-flex gap-1 py-1" aria-label="Thinking">
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.2s]" />
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.1s]" />
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" />
+                          </span>
+                        )
+                      )}
+                    </div>
+                    {i > 0 && msg.content && !(streaming && last) && (
+                      <div className="mt-1.5 flex items-center gap-3 text-[11px] text-gray-400 opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:focus-within:opacity-100">
+                        <button type="button" onClick={() => copy(msg.content, i)} className="hover:text-gray-700">
+                          {copiedIndex === i ? "Copied" : "Copy"}
+                        </button>
+                        {enableNotes && (
+                          <button
+                            type="button"
+                            onClick={() => handleSaveNote(i)}
+                            disabled={savedIds.has(i)}
+                            className="hover:text-emerald-600 disabled:cursor-default disabled:text-emerald-600"
+                          >
+                            {savedIds.has(i) ? "Saved to notes" : "Save to notes"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {isEmpty && starters && starters.length > 0 && !noKey && (
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {starters.map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => (st.endsWith(": ") ? (setInput(st), textareaRef.current?.focus()) : sendMessage(st))}
+                    className="rounded-2xl border border-gray-200 px-3.5 py-3 text-left text-xs leading-snug text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Composer */}
+        <form onSubmit={handleSubmit} className="flex-none px-3 pb-3 pt-1">
+          <div className="mx-auto max-w-3xl rounded-[26px] border border-gray-200 bg-white shadow-[0_2px_12px_-4px_rgba(16,27,56,0.18)] focus-within:border-gray-300">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={noKey}
+              rows={1}
+              placeholder={streaming ? "Atlas is writing…" : "Message Atlas"}
+              aria-label="Message Atlas"
+              className="block max-h-[200px] w-full resize-none bg-transparent px-4 pt-3.5 text-sm leading-relaxed text-gray-900 placeholder:text-gray-400 focus:outline-none disabled:opacity-50"
+            />
+            <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5 pt-1">
+              <div className="min-w-0">{composerAccessory}</div>
+              {streaming ? (
+                <button
+                  type="button"
+                  onClick={stopStreaming}
+                  aria-label="Stop generating"
+                  title="Stop generating"
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-900 text-white transition-colors hover:bg-gray-700"
+                >
+                  <span className="h-2.5 w-2.5 rounded-[2px] bg-white" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!input.trim() || noKey}
+                  aria-label="Send message"
+                  title="Send (Enter) · new line (Shift+Enter)"
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-gray-900 text-white transition-colors hover:bg-gray-700 disabled:bg-gray-200 disabled:text-gray-400"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19V5m0 0-6 6m6-6 6 6" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="mt-1.5 text-center text-[10px] text-gray-400">Atlas can make mistakes. Check important claims against your sources.</p>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -285,7 +559,7 @@ export default function AssistantChat({
               {selectedIdea.title}
             </span>
           ) : (
-            <span className="text-xs text-gray-400">Writing assistant · Groq</span>
+            <span className="text-xs text-gray-400">{subtitle ?? "Writing assistant · Groq"}</span>
           )}
         </div>
         <button
@@ -302,27 +576,10 @@ export default function AssistantChat({
       </div>
 
       {/* No API key banner */}
-      {noKey && (
-        <div className="mx-4 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-          <strong>No model key.</strong>{" "}
-          <button onClick={() => openModelKeyDialog()} className="underline font-semibold hover:text-amber-900">
-            Add your own API key
-          </button>{" "}
-          (Claude, OpenAI, Gemini, Groq…), or set{" "}
-          <code className="font-mono bg-amber-100 px-1 rounded">GROQ_API_KEY</code> on the server.
-        </div>
-      )}
+      {noKey && <NoKeyBanner className="mx-4 mt-3" />}
 
       {/* Highlight-to-knowledge popover — follows the current text selection, fixed to viewport coords */}
-      {highlightPopup && (
-        <button
-          onClick={handleSaveHighlight}
-          style={{ position: "fixed", left: highlightPopup.x, top: highlightPopup.y - 40, transform: "translateX(-50%)" }}
-          className="z-50 flex items-center gap-1.5 bg-gray-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg hover:bg-gray-700 transition-colors"
-        >
-          ✨ Save to Knowledge
-        </button>
-      )}
+      {highlightPopup && <HighlightPopup x={highlightPopup.x} y={highlightPopup.y} onSave={handleSaveHighlight} />}
 
       {/* Messages */}
       <div ref={messagesRef} onMouseUp={handleSelectionChange} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -339,6 +596,11 @@ export default function AssistantChat({
                 </div>
               )}
               <div className={wide ? "max-w-full flex-1 min-w-0" : "max-w-[80%]"}>
+                {msg.role === "assistant" && msg.skill && (
+                  <div className="mb-1 text-[11px] font-medium text-gray-500">
+                    {getPaperSkill(msg.skill).icon} {getPaperSkill(msg.skill).label}
+                  </div>
+                )}
                 <div
                   className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     msg.role === "user"
@@ -376,8 +638,24 @@ export default function AssistantChat({
         <div ref={bottomRef} />
       </div>
 
+      {toolbar && <div className="flex-shrink-0 border-t border-gray-200 bg-white">{toolbar}</div>}
+
       {/* Input */}
-      <form onSubmit={handleSubmit} className="flex-shrink-0 border-t border-gray-200 p-4 bg-white">
+      <form onSubmit={handleSubmit} className={`flex-shrink-0 p-4 bg-white ${toolbar ? "" : "border-t border-gray-200"}`}>
+        {starters && starters.length > 0 && !input.trim() && !streaming && !noKey && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {starters.map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => (st.endsWith(": ") ? setInput(st) : sendMessage(st))}
+                className="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1 hover:bg-gray-100 hover:text-gray-900 transition-colors text-left"
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2 items-end">
           <textarea
             value={input}
@@ -401,5 +679,31 @@ export default function AssistantChat({
         </div>
       </form>
     </div>
+  );
+}
+
+/** Shown when the server has no model key and the user hasn't added one (#88). */
+function NoKeyBanner({ className = "" }: { className?: string }) {
+  return (
+    <div className={`rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 ${className}`}>
+      <strong>No model key.</strong>{" "}
+      <button onClick={() => openModelKeyDialog()} className="font-semibold underline hover:text-amber-900">
+        Add your own API key
+      </button>{" "}
+      (Claude, OpenAI, Gemini, Groq…), or set <code className="rounded bg-amber-100 px-1 font-mono">GROQ_API_KEY</code> on the server.
+    </div>
+  );
+}
+
+/** "Save to Knowledge" popover above a text selection, fixed to viewport coordinates. */
+function HighlightPopup({ x, y, onSave }: { x: number; y: number; onSave: () => void }) {
+  return (
+    <button
+      onClick={onSave}
+      style={{ position: "fixed", left: x, top: y - 40, transform: "translateX(-50%)" }}
+      className="z-50 flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white shadow-lg transition-colors hover:bg-gray-700"
+    >
+      ✨ Save to Knowledge
+    </button>
   );
 }
